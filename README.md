@@ -30,7 +30,7 @@ Stash Native SDK (iOS/Android)
 
 ## Quick Setup (This Sample Project)
 
-After cloning this repository, initialize the Git submodules:
+This sample project is UE 5.7. After cloning this repository, initialize the Git submodules:
 
 ```bash
 git submodule update --init --recursive
@@ -40,7 +40,7 @@ This command will download the Stash Native SDK into the `Plugins/stash-native-m
 
 ## Setup in Clean Unreal Project
 
-Follow these steps to integrate Stash Pay into your own Unreal Engine project:
+Follow these steps to integrate Stash Pay into your own Unreal Engine (4.21+ / 5.0+) project:
 
 ### 1. Add MobileNativeCode Plugin
 
