@@ -13,7 +13,7 @@ You can either explore the included Unreal Engine 5.0+ sample project in this re
 
 ## Demo
 
-<video src="https://github.com/stashgg/stash-unreal/raw/refs/heads/main/.github/video/video_ios.webm" width="200" controls allowfullscreen></video>
+<video src="https://github.com/stashgg/stash-unreal/raw/refs/heads/main/.github/video/video_ios.webm" width="200" controls></video>
 
 *iOS demo showing Stash Pay checkout integration in Unreal Engine (iOS)*
 
