@@ -11,6 +11,12 @@ You can either explore the included Unreal Engine 5.0+ sample project in this re
 
 **Engine Support**: UE 4.21+ and UE 5.0+
 
+## Demo
+
+<video src=".github/video/video_ios.webm" width="200" controls allowfullscreen></video>
+
+*iOS demo showing Stash Pay checkout integration in Unreal Engine (iOS)*
+
 ## Architecture
 
 Integration uses a layered architecture to integrate native Stash Pay dialog functionality:
