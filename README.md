@@ -1,4 +1,4 @@
-# Stash Unreal
+# Stash SDK for Unreal Engine
 
 > **Warning:**  
 > This is a preview version currently under development. Features, APIs, and workflow may change, and the integration process or plugin behavior is subject to updates.
