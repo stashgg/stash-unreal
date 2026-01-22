@@ -94,6 +94,10 @@ git submodule add https://github.com/stashgg/stash-native.git Plugins/stash-nati
 - [Stash Native SDK](https://github.com/stashgg/stash-native) - Native SDK documentation
 - [Stash Pay Docs](https://docs.stash.gg) - Official Stash Pay documentation
 
+## Troubleshooting
+
+If you encounter issues specifically with the **MobileNativeCode plugin** (e.g., plugin not loading, native calls failing, Android/iOS compilation errors), please refer to the [MobileNativeCode repository README](https://github.com/Sovahero/PluginMobileNativeCode) for detailed setup instructions and troubleshooting guidance.
+
 ## Support
 
-For integration issues, contact: developers@stash.gg
+For Stash Pay integration issues, contact: developers@stash.gg
