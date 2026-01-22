@@ -1,0 +1,3 @@
+[submodule "Plugins/stash-native-main"]
+	path = Plugins/stash-native-main
+	url = https://github.com/stashgg/stash-native.git

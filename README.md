@@ -1,30 +1,29 @@
-# Stash Plugin for Unreal Engine
+# Stash Unreal
 
-## About
+Unreal Engine project integrating Stash Pay checkout functionality.
 
-This plugin enables seamless integration of Stash services into your Unreal Engine projects. The package is wrapping Stash API endpoints and is very lightweight with no external dependencies. 
+## Setup
 
-To start with the SDK, you need to import the package from the releases tab and follow [getting started guide](https://docs.stash.gg/docs/configure-unity-project).
+After cloning this repository, initialize the Git submodules:
 
-## Usage
+```bash
+git submodule update --init --recursive
+```
 
-To interact with Stash API and handle responses, the SDK offers the `StashAuth`, `StashLauncher`, and other classes, named according to the product you plan to use.
-All classes are static, with no inheritance to the MonoBehaviour, no need to place them in the scene, and can be called only when needed.
+This will fetch the Stash Native SDK from `Plugins/stash-native-main/`.
 
-### Import package manually
+## Requirements
 
-Download the latest release of the UnrealPlugin and SDK (make sure to use the .zip link)
-1. Open or create a new project.
-2. Create a Plugins folder in your project root folder (if one doesn't already exist).
-3. Drag the unzipped Stash plugin into the project's Plugins folder
-4. The plugin should be enabled and ready to use. If not, enable it.
-5. Use our Unreal Examples to get started.
+- Unreal Engine
+- iOS/Android development tools (for mobile builds)
 
-## Changelog
+## Project Structure
 
-Package follows Semantic Versioning `(major.minor.patch)`. Any potential breaking changes will always cause a major version increment, non-breaking new features will cause a minor version increment, and bugfixes will cause a patch version increment.
-A full version changelog is available in the [changelog](/CHANGELOG.md) file.
+- `Source/` - C++ source code
+- `Content/` - Unreal assets and blueprints
+- `Plugins/stash-native-main/` - Stash Native SDK (Git submodule)
+- `Config/` - Project configuration files
 
-## Feedback and troubleshooting
+## Stash Integration
 
-If you run into any problems or have a feature request, open up a [new issue](https://github.com/stashgg/stash-unity/issues/new) in the repository. Please follow the issue/request template.
+This project uses the [Stash Native SDK](https://github.com/stashgg/stash-native) for payment integration on iOS and Android platforms.

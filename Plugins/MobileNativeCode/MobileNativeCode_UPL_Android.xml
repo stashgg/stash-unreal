@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root xmlns:android="http://schemas.android.com/apk/res/android">
+	<init>
+		<log text="MobileNativeCode Plugin: Initializing Android UPL"/>
+	</init>
+	
+	<resourceCopies>
+		<copyDir src="$S(PluginDir)/Source/MobileNativeCode/Private/Android/Java" 
+				 dst="$S(BuildDir)/src/com/Plugins/MobileNativeCode" />
+		<!-- Copy StashPay library Java files -->
+		<copyDir src="$S(ProjectDir)/Plugins/stash-native-main/Android/stashpay/src/main/java/com/stash/popup" 
+				 dst="$S(BuildDir)/src/com/stash/popup" />
+		<!-- Copy StashPay resources -->
+		<copyDir src="$S(ProjectDir)/Plugins/stash-native-main/Android/stashpay/src/main/res" 
+				 dst="$S(BuildDir)/res" />
+	</resourceCopies>
+	
+	<gameActivityImportAdditions>
+		<insert>
+			import com.Plugins.MobileNativeCode.WebViewHelper;
+			import com.Plugins.MobileNativeCode.StashPayHelper;
+		</insert>
+	</gameActivityImportAdditions>
+	
+	<gameActivityClassAdditions>
+		<insert>
+			// MobileNativeCode Plugin - WebView Helper
+			public void AndroidThunkJava_OpenWebView(String url)
+			{
+				WebViewHelper.Initialize(this);
+				WebViewHelper.OpenWebView(url);
+			}
+			
+			public void AndroidThunkJava_CloseWebView()
+			{
+				WebViewHelper.CloseWebView();
+			}
+			
+			public boolean AndroidThunkJava_IsWebViewOpen()
+			{
+				return WebViewHelper.IsWebViewOpen();
+			}
+			
+			// MobileNativeCode Plugin - StashPay Helper
+			public void AndroidThunkJava_OpenStashPayCheckout(String url)
+			{
+				StashPayHelper.Initialize(this);
+				StashPayHelper.OpenCheckout(url);
+			}
+			
+			public void AndroidThunkJava_DismissStashPayCheckout()
+			{
+				StashPayHelper.DismissCheckout();
+			}
+			
+			public boolean AndroidThunkJava_IsStashPayCheckoutOpen()
+			{
+				return StashPayHelper.IsCheckoutOpen();
+			}
+			
+			// Called from Java when payment succeeds
+			public void AndroidThunkJava_NotifyPaymentSuccess(String itemName)
+			{
+				// This will be implemented to call C++ via JNI
+				nativeNotifyPaymentSuccess(itemName);
+			}
+			
+			// Native method declaration
+			private native void nativeNotifyPaymentSuccess(String itemName);
+		</insert>
+	</gameActivityClassAdditions>
+	
+	<androidManifestUpdates>
+		<addPermission android:name="android.permission.INTERNET"/>
+		<!-- Add StashPayCardPortraitActivity using the correct UPL syntax -->
+		<addElements tag="application">
+			<activity android:name="com.stash.popup.StashPayCardPortraitActivity"
+					  android:theme="@style/StashPayCardTheme"
+					  android:screenOrientation="portrait"
+					  android:configChanges="orientation|screenSize|keyboardHidden"
+					  android:exported="false"/>
+		</addElements>
+	</androidManifestUpdates>
+	
+	<gradleProperties>
+		<insert>
+			android.useAndroidX=true
+			android.enableJetifier=true
+		</insert>
+	</gradleProperties>
+	
+	<buildGradleAdditions>
+		<insert>
+			dependencies {
+				implementation 'androidx.appcompat:appcompat:1.6.1'
+				implementation 'androidx.browser:browser:1.7.0'
+			}
+		</insert>
+	</buildGradleAdditions>
+</root>

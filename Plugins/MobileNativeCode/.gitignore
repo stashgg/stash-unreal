@@ -1,0 +1,81 @@
+# Unreal Engine Build Artifacts
+Binaries/
+Intermediate/
+Build/
+DerivedDataCache/
+
+# Compiled Object files
+*.o
+*.obj
+*.a
+*.lib
+*.dylib
+*.dll
+*.so
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Visual Studio files
+.vs/
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.vcxproj
+*.vcxproj.filters
+
+# Xcode files
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.pbxuser
+project.xcworkspace/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# IDE specific
+*.swp
+*.swo
+*~
+
+# Build logs
+*.log
+
+# Backup files
+*.orig
+*.bak
+*.backup
