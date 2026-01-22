@@ -13,9 +13,9 @@ You can either explore the included Unreal Engine 5.0+ sample project in this re
 
 ## Demo
 
-<video src="https://github.com/stashgg/stash-unreal/raw/refs/heads/main/.github/video/video_ios.webm" width="200" controls allowfullscreen></video>
+[Watch iOS Demo Video](.github/video/video_ios.webm)
 
-*iOS demo showing Stash Pay checkout integration in Unreal Engine (iOS)*
+*Click to view: Stash Pay checkout integration running on iOS in Unreal Engine*
 
 ## Architecture
 
