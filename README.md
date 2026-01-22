@@ -17,6 +17,24 @@ You can either explore the included Unreal Engine 5.0+ sample project in this re
 
 *Click to view: Stash Pay checkout integration running on iOS in Unreal Engine*
 
+## Prerequisites
+
+Before using the Stash Pay popup in your Unreal Engine game, **you must set up your game server** to create Stash Pay checkout URLs using the Stash API. 
+
+If you haven't already configured checkout URL generation on your backend, see our [Stash Pay Integration Guide](https://docs.stash.gg/guides/stash-pay/integration) for complete instructions.
+
+### Integration Flow
+
+The Stash Pay integration follows this workflow:
+
+1. **Server generates checkout URL** - Your game server calls the Stash API to create a checkout link
+2. **URL sent to game client** - The checkout URL is transmitted to the Unreal Engine client
+3. **Game client displays checkout** - Client opens the Stash Pay dialog using this SDK
+4. **Client listens to callbacks** - Game receives payment success/failure events
+5. **Server verifies purchase** - Your backend validates the purchase via webhooks before granting items
+
+This SDK handles steps 3-4 (client-side display and callbacks). You are responsible for implementing steps 1, 2, and 5 (server-side URL generation, delivery, and verification).
+
 ## Architecture
 
 Integration uses a layered architecture to integrate native Stash Pay dialog functionality:
@@ -44,7 +62,7 @@ git submodule update --init --recursive
 
 This command will download the Stash Native SDK into the `Plugins/stash-native-main/` directory. Once complete, you can build for iOS or Android, provided you have a properly configured Unreal Engine iOS or Android development environment.
 
-## Setup in Clean Unreal Project
+## Setup in Clean / Existing Unreal Project
 
 Follow these steps to integrate Stash Pay into your own Unreal Engine (4.21+ / 5.0+) project:
 
@@ -76,6 +94,103 @@ git submodule add https://github.com/stashgg/stash-native.git Plugins/stash-nati
 1. Open the Level Blueprint
 2. You should be able to call MobileNativeCode Blueprint functions
 3. Package for Android or iOS to test native integration
+
+### 5. Using the SDK - Show Checkout & Listen to Callbacks
+
+Once the plugin is set up, you can integrate Stash Pay checkout into your game using either C++ or Blueprints.
+
+#### C++ Implementation
+
+**Opening the Checkout:**
+
+```cpp
+#include "MobileNativeCodeBlueprint.h"
+
+void AYourPlayerController::OpenCheckout(const FString& CheckoutURL)
+{
+    #if PLATFORM_IOS
+        UMobileNativeCodeBlueprint::OpenStashPayCheckoutIOS(CheckoutURL);
+    #elif PLATFORM_ANDROID
+        UMobileNativeCodeBlueprint::OpenStashPayCheckout(CheckoutURL);
+    #endif
+}
+```
+
+**Listening to Payment Callbacks:**
+
+Bind to the payment success delegate in your controller's `BeginPlay()` or initialization code:
+
+```cpp
+// In your PlayerController.h
+UFUNCTION()
+void OnPaymentSuccessReceived(const FString& ItemName);
+
+// In your PlayerController.cpp BeginPlay()
+void AYourPlayerController::BeginPlay()
+{
+    Super::BeginPlay();
+    
+    // Bind to payment success delegate
+    UMobileNativeCodeBlueprint::OnPaymentSuccess.AddDynamic(this, &AYourPlayerController::OnPaymentSuccessReceived);
+}
+
+// Handle payment success
+void AYourPlayerController::OnPaymentSuccessReceived(const FString& ItemName)
+{
+    UE_LOG(LogTemp, Warning, TEXT("Payment succeeded for: %s"), *ItemName);
+    
+    // Grant items to the player
+    // Show success UI
+    // etc.
+}
+```
+
+#### Blueprint Implementation
+
+**Opening the Checkout:**
+
+1. Get the checkout URL from your server
+2. Use the **Open Stash Pay Checkout iOS** (iOS) or **Open Stash Pay Checkout** (Android) node
+3. Connect the checkout URL string to the node
+
+
+**Listening to Payment Callbacks:**
+
+The `OnPaymentSuccess` delegate is static and requires C++ binding. To use it in Blueprints:
+
+1. Create a C++ PlayerController that binds to the delegate (as shown in the C++ example above)
+2. Create a Blueprint event or function that can be called from C++
+3. Call your Blueprint event from the C++ callback handler
+
+**Example pattern:**
+
+```cpp
+// In your C++ PlayerController
+UFUNCTION(BlueprintImplementableEvent, Category = "Store")
+void OnPaymentSucceeded(const FString& ItemName);
+
+void AYourPlayerController::OnPaymentSuccessReceived(const FString& ItemName)
+{
+    // Call Blueprint event
+    OnPaymentSucceeded(ItemName);
+}
+```
+
+Then implement `OnPaymentSucceeded` as an event in your Blueprint to handle the purchase.
+
+**Checking Checkout Status:**
+
+Use the **Is Stash Pay Checkout Open iOS** (iOS) or **Is Stash Pay Checkout Open** (Android) node to check if the checkout dialog is currently displayed.
+
+**Closing the Checkout:**
+
+Use the **Dismiss Stash Pay Checkout iOS** (iOS) or **Dismiss Stash Pay Checkout** (Android) node to programmatically close the checkout dialog.
+
+#### Complete Reference
+
+For a complete implementation example, see:
+- **C++ Example**: `Source/StashUnreal/MyPlayerController.cpp` (lines 784-799 for callbacks)
+- **Blueprint Setup**: Blueprint instances of `BP_MyPlayerController` in the sample project
 
 ## Requirements
 
