@@ -5,7 +5,7 @@
 #if PLATFORM_IOS
 
 // Include the stash-native implementation directly
-#import "../../../../../../stash-native-main/iOS/StashPay/Sources/StashPay/StashPayCard.mm"
+#import "../../../../../../stash-native-main/iOS/StashPay/Sources/StashPay/StashPayCard.m"
 
 #endif
 
