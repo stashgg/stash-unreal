@@ -1,26 +1,29 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "1.0",
-	"FriendlyName": "Mobile Native Code",
-	"Description": "Plugin providing native mobile functionality access for Unreal Engine projects",
+	"VersionName": "2.5",
+	"FriendlyName": "MobileNativeCode",
+	"Description": "Code utils for mobile platforms",
 	"Category": "Mobile",
 	"CreatedBy": "Sovahero",
 	"CreatedByURL": "",
-	"DocsURL": "",
+	"DocsURL": "https://github.com/Sovahero/PluginMobileNativeCode",
 	"MarketplaceURL": "",
-	"SupportURL": "",
+	"SupportURL": "https://github.com/Sovahero/PluginMobileNativeCode/issues",
 	"CanContainContent": false,
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
-	"Installed": false,
-	"EngineVersion": "5.7.0",
+	"Installed": true,
+	"EnabledByDefault": false,
+	"RequiresBuildPlatform": true,
 	"Modules": [
 		{
 			"Name": "MobileNativeCode",
 			"Type": "Runtime",
 			"LoadingPhase": "Default",
-			"PlatformAllowList": [
+			"WhitelistPlatforms": [
+				"Win64",
+				"Mac",
 				"Android",
 				"IOS"
 			]

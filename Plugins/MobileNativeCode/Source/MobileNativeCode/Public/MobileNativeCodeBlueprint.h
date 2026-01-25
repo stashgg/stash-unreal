@@ -1,66 +1,146 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #pragma once
 
-#include "CoreMinimal.h"
-#include "Kismet/BlueprintFunctionLibrary.h"
+#include <Kismet/BlueprintFunctionLibrary.h>
+#include <Runtime/Launch/Resources/Version.h>
+#include <Async/Async.h>
+#include <Engine.h>
+
+#include "NativeUI/Enums/ToastLengthMessage.h"
+
 #include "MobileNativeCodeBlueprint.generated.h"
 
-// Delegate for payment success events
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPaymentSuccess, const FString&, ItemName);
+
+
+// #~~~~~~~~~~~~~~~~~~~~~~~~~ begin 2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//-- Dispatcher
+DECLARE_DYNAMIC_DELEGATE_OneParam(FTypeDispacth, const FString&, ReturnValue); // DispatchName, ParamType, ParamName  
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~ end 2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+// #~~~~~~~~~~~~~~~~~~~~~~~~~ Stash Pay Delegates ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//-- Stash Pay Payment Callbacks
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashPaymentSuccess);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashPaymentFailure);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashDialogDismissed);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStashPageLoaded, float, LoadTimeMs);
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 
 UCLASS()
 class MOBILENATIVECODE_API UMobileNativeCodeBlueprint : public UBlueprintFunctionLibrary
 {
-	GENERATED_BODY()
-
+  GENERATED_BODY()
 public:
-	// Delegate that fires when payment succeeds
-	// Note: Static delegates can't use UPROPERTY, so Blueprint binding must be done in C++
-	static FOnPaymentSuccess OnPaymentSuccess;
-	
-	// Android WebView Functions
-	UFUNCTION(BlueprintCallable, Category = "Mobile Native Code|Android")
-	static void OpenAndroidWebView(const FString& URL);
+  UMobileNativeCodeBlueprint(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer) {};
 
-	UFUNCTION(BlueprintCallable, Category = "Mobile Native Code|Android")
-	static void CloseAndroidWebView();
+  // #~~~~~~~~~~~~~~~~~~~~~~~~ begin 2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  //-- Dispatcher
+  
+  static FTypeDispacth StaticValueDispatch;
+  static void StaticFunctDispatch(const FString& ReturnValue);
 
-	UFUNCTION(BlueprintCallable, Category = "Mobile Native Code|Android")
-	static bool IsAndroidWebViewOpen();
+#if PLATFORM_IOS
+  static void CallBackCppIOS(NSString* sResult);
+#endif //PLATFORM_IOS
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~ end 2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	// iOS WebView Functions
-	UFUNCTION(BlueprintCallable, Category = "Mobile Native Code|iOS")
-	static void OpenIOSWebView(const FString& URL);
 
-	UFUNCTION(BlueprintCallable, Category = "Mobile Native Code|iOS")
-	static void CloseIOSWebView();
+  /**
+   * Concatenation of the platform name from native code
+   */
+  UFUNCTION(BlueprintCallable, Category = "MobileNativeCode Category")
+  static FString HelloWorld(FString MyStr = "Hello World");
 
-	UFUNCTION(BlueprintCallable, Category = "Mobile Native Code|iOS")
-	static bool IsIOSWebViewOpen();
+  /**
+   * Asynchronous platform name concatenation from native code
+   */
+  UFUNCTION(BlueprintCallable, Category = "MobileNativeCode Category")
+  static void asyncHelloWorld(const FTypeDispacth& CallBackPlatform, FString MyStr = "async Hello World");
 
-	// StashPay Functions (Android)
-	UFUNCTION(BlueprintCallable, Category = "Mobile Native Code|StashPay|Android")
-	static void OpenStashPayCheckout(const FString& URL);
+  /**
+   * Displaying a pop-up message
+   */
+  UFUNCTION(BlueprintCallable, Category = "MobileNativeCode Category")
+  static void ShowToastMobile(FString Message, EToastLengthMessage Length);
 
-	UFUNCTION(BlueprintCallable, Category = "Mobile Native Code|StashPay|Android")
-	static void DismissStashPayCheckout();
+  /**
+   * Example of passing different types of arrays and returning a String array with two values
+   */
+  UFUNCTION(BlueprintCallable, Category = "MobileNativeCode Category")
+  static void ExampleArray(FString& Arr1, FString& Arr2);
 
-	UFUNCTION(BlueprintCallable, Category = "Mobile Native Code|StashPay|Android")
-	static bool IsStashPayCheckoutOpen();
+  /**
+   * Returns information about the device
+   */
+  UFUNCTION(BlueprintCallable, Category = "MobileNativeCode Category")
+  static FString GetDeviceInfo();
 
-	// StashPay Functions (iOS)
-	UFUNCTION(BlueprintCallable, Category = "Mobile Native Code|StashPay|iOS")
-	static void OpenStashPayCheckoutIOS(const FString& URL);
+  /**
+   * Only for Android. Example of working with Java objects inside C++
+   */
+  UFUNCTION(BlueprintCallable, Category = "MobileNativeCode Category")
+  static void ExampleMyJavaObject(FString& JavaBundle);
 
-	UFUNCTION(BlueprintCallable, Category = "Mobile Native Code|StashPay|iOS")
-	static void DismissStashPayCheckoutIOS();
+  // #~~~~~~~~~~~~~~~~~~~~~~~~~ Stash Pay Functions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  
+  /**
+   * Opens the Stash Pay checkout dialog on iOS.
+   * @param CheckoutURL The URL to load in the checkout dialog
+   */
+  UFUNCTION(BlueprintCallable, Category = "StashPay")
+  static void OpenStashPayCheckoutIOS(const FString& CheckoutURL);
 
-	UFUNCTION(BlueprintCallable, Category = "Mobile Native Code|StashPay|iOS")
-	static bool IsStashPayCheckoutOpenIOS();
+  /**
+   * Opens the Stash Pay checkout dialog on Android.
+   * @param CheckoutURL The URL to load in the checkout dialog
+   */
+  UFUNCTION(BlueprintCallable, Category = "StashPay")
+  static void OpenStashPayCheckout(const FString& CheckoutURL);
 
-	// Internal function called from Java when payment succeeds
-	// This is called via JNI from StashPayHelper.java
-	UFUNCTION(Category = "Mobile Native Code|StashPay")
-	static void NotifyPaymentSuccess(const FString& ItemName);
+  /**
+   * Checks if the Stash Pay checkout dialog is currently open on iOS.
+   * @return true if the checkout dialog is displayed
+   */
+  UFUNCTION(BlueprintCallable, Category = "StashPay")
+  static bool IsStashPayCheckoutOpenIOS();
+
+  /**
+   * Checks if the Stash Pay checkout dialog is currently open on Android.
+   * @return true if the checkout dialog is displayed
+   */
+  UFUNCTION(BlueprintCallable, Category = "StashPay")
+  static bool IsStashPayCheckoutOpen();
+
+  /**
+   * Dismisses the Stash Pay checkout dialog on iOS.
+   */
+  UFUNCTION(BlueprintCallable, Category = "StashPay")
+  static void DismissStashPayCheckoutIOS();
+
+  /**
+   * Dismisses the Stash Pay checkout dialog on Android.
+   */
+  UFUNCTION(BlueprintCallable, Category = "StashPay")
+  static void DismissStashPayCheckout();
+
+  // Stash Pay Delegates - Bind to these to receive payment callbacks
+  
+  /** Called when a payment completes successfully */
+  static FOnStashPaymentSuccess OnPaymentSuccess;
+  
+  /** Called when a payment fails */
+  static FOnStashPaymentFailure OnPaymentFailure;
+  
+  /** Called when the checkout dialog is dismissed by the user */
+  static FOnStashDialogDismissed OnDialogDismissed;
+  
+  /** Called when the checkout page finishes loading */
+  static FOnStashPageLoaded OnPageLoaded;
+  
+  // Internal callback functions called from native code
+  static void HandlePaymentSuccess();
+  static void HandlePaymentFailure();
+  static void HandleDialogDismissed();
+  static void HandlePageLoaded(float LoadTimeMs);
+  
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 };
