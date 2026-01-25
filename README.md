@@ -1,7 +1,7 @@
 # Stash SDK for Unreal Engine 4 (Legacy Version)
 
-> **Unreal Engine 5 Recommended:**  
-> This is a legacy sample for Unreal Engine 4.27+. For new projects, we recommend using Unreal Engine 5 with our actively maintained SDK. See the [main branch](https://github.com/stashgg/stash-unreal) for UE5 support.
+> **For Unreal Engine 5:**  
+> This is a sample for Unreal Engine 4.27+. For new projects, we recommend using Unreal Engine 5 with our actively maintained SDK. See the [main branch](https://github.com/stashgg/stash-unreal) for UE5 support.
 
 Seamlessly integrate the Stash Pay native in-app purchase dialog with Unreal Engine 4 using the MobileNativeCode plugin and the Stash Pay Native SDK.
 
