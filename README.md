@@ -9,7 +9,10 @@ Seamlessly integrate the Stash Pay native in-app purchase dialog with Unreal Eng
 
 You can either explore the included Unreal Engine 5.0+ sample project in this repository, or follow the "Setup in Clean Unreal Project" guide below to add Stash Pay integration to your own Unreal project.
 
-**Engine Support**: UE 4.21+ and UE 5.0+
+**Engine Support**: UE 5.0+
+
+> **Unreal Engine 4 Warning:**  
+> While we actively maintain Unreal 5 support, we have a sample usage for Unreal Engine 4 (4.27-plus). For Unreal Engine 4 sample please use the `4.27-plus` branch of this repository as the wrapper implementation differs.
 
 ## Demo
 
@@ -64,7 +67,7 @@ This command will download the Stash Native SDK into the `Plugins/stash-native-m
 
 ## Setup in Clean / Existing Unreal Project
 
-Follow these steps to integrate Stash Pay into your own Unreal Engine (4.21+ / 5.0+) project:
+Follow these steps to integrate Stash Pay into your own Unreal Engine 5.0+ project:
 
 ### 1. Add MobileNativeCode Plugin
 
@@ -194,7 +197,7 @@ For a complete implementation example, see:
 
 ## Requirements
 
-- Unreal Engine 4.21+ or 5.0+
+- Unreal Engine 5.0+
 - Visual Studio (for Windows/Android development)
 - Xcode with iOS SDK (for iOS development)
 - Android SDK (for Android builds)
