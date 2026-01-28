@@ -1,33 +1,33 @@
 // Copyright Stash. All Rights Reserved.
 // Stash Pay Unreal Engine SDK - Module Implementation
 
-#include "MobileNativeCode.h"
-#include "MobileNativeCodeEditorSettings.h"
+#include "Stash.h"
+#include "StashEditorSettings.h"
 
 #if PLATFORM_ANDROID
 #include "Android/Utils/AndroidUtils.h"
 #endif
 
-#define LOCTEXT_NAMESPACE "StashPayModule"
+#define LOCTEXT_NAMESPACE "StashModule"
 
-void FMobileNativeCodeModule::StartupModule()
+void FStashModule::StartupModule()
 {
-	// Register settings in Project Settings -> Plugins -> StashPay
+	// Register settings in Project Settings -> Plugins -> Stash
 	if (ISettingsModule* SettingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings"))
 	{
-		UMobileNativeCodeEditorSettings::RegisterEditorSettings(SettingsModule);
+		UStashEditorSettings::RegisterEditorSettings(SettingsModule);
 	}
 
 	// Initialize platform-specific components
 	Initialization();
 }
 
-void FMobileNativeCodeModule::ShutdownModule()
+void FStashModule::ShutdownModule()
 {
 	// Cleanup if needed
 }
 
-void FMobileNativeCodeModule::Initialization()
+void FStashModule::Initialization()
 {
 #if PLATFORM_ANDROID
 	AndroidUtils::Initialization();
@@ -38,7 +38,7 @@ void FMobileNativeCodeModule::Initialization()
 #endif
 }
 
-bool FMobileNativeCodeModule::IsSupported()
+bool FStashModule::IsSupported()
 {
 #if PLATFORM_ANDROID
 	return AndroidUtils::isSupportPlatform();
@@ -51,4 +51,4 @@ bool FMobileNativeCodeModule::IsSupported()
 
 #undef LOCTEXT_NAMESPACE
 
-IMPLEMENT_MODULE(FMobileNativeCodeModule, MobileNativeCode)
+IMPLEMENT_MODULE(FStashModule, Stash)

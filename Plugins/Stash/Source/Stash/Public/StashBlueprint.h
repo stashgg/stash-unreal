@@ -8,7 +8,7 @@
 #include <Async/Async.h>
 #include <Engine.h>
 
-#include "MobileNativeCodeBlueprint.generated.h"
+#include "StashBlueprint.generated.h"
 
 // Stash Pay Payment Callbacks
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashPaymentSuccess);
@@ -23,12 +23,12 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStashPageLoaded, float, LoadTimeM
  * into Unreal Engine projects on iOS and Android.
  */
 UCLASS()
-class MOBILENATIVECODE_API UMobileNativeCodeBlueprint : public UBlueprintFunctionLibrary
+class STASH_API UStashBlueprint : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 
 public:
-	UMobileNativeCodeBlueprint(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer) {};
+	UStashBlueprint(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer) {};
 
 	/**
 	 * Opens the Stash Pay checkout dialog.
@@ -36,7 +36,7 @@ public:
 	 * 
 	 * @param CheckoutURL The URL to load in the checkout dialog
 	 */
-	UFUNCTION(BlueprintCallable, Category = "StashPay")
+	UFUNCTION(BlueprintCallable, Category = "Stash")
 	static void OpenCheckout(const FString& CheckoutURL);
 
 	/**
@@ -45,14 +45,14 @@ public:
 	 * 
 	 * @return true if the checkout dialog is displayed
 	 */
-	UFUNCTION(BlueprintCallable, Category = "StashPay")
+	UFUNCTION(BlueprintCallable, Category = "Stash")
 	static bool IsCheckoutOpen();
 
 	/**
 	 * Dismisses the Stash Pay checkout dialog.
 	 * Works on both iOS and Android platforms.
 	 */
-	UFUNCTION(BlueprintCallable, Category = "StashPay")
+	UFUNCTION(BlueprintCallable, Category = "Stash")
 	static void DismissCheckout();
 
 	// Stash Pay Delegates - Bind to these to receive payment callbacks

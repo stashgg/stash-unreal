@@ -1,7 +1,7 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Pay Unreal Engine SDK - Android JNI Bridge
+// Stash Unreal Engine SDK - Android JNI Bridge
 
-package com.Plugins.MobileNativeCode;
+package com.Plugins.Stash;
 
 import android.app.Activity;
 import android.util.Log;
@@ -10,18 +10,18 @@ import androidx.annotation.Keep;
 import com.stash.popup.StashPayCard;
 
 /**
- * StashPayHelper - Java wrapper for Stash Pay Android SDK
+ * StashHelper - Java wrapper for Stash Android SDK
  * 
- * This class bridges the Stash Pay native Android SDK with Unreal Engine.
+ * This class bridges the Stash native Android SDK with Unreal Engine.
  * It provides static methods callable from C++ via JNI.
  */
 @Keep
-public class StashPayHelper {
-    private static final String TAG = "StashPayHelper";
+public class StashHelper {
+    private static final String TAG = "StashHelper";
     private static boolean isInitialized = false;
     
     /**
-     * Native C++ callback methods (implemented in MobileNativeCodeBlueprint.cpp)
+     * Native C++ callback methods (implemented in StashBlueprint.cpp)
      */
     public static native void nativeOnPaymentSuccess();
     public static native void nativeOnPaymentFailure();
@@ -29,7 +29,7 @@ public class StashPayHelper {
     public static native void nativeOnPageLoaded(long loadTimeMs);
     
     /**
-     * Initializes the Stash Pay SDK with the given activity.
+     * Initializes the Stash SDK with the given activity.
      * Must be called before opening checkout.
      * 
      * @param activity The current Android activity
@@ -41,7 +41,7 @@ public class StashPayHelper {
             return;
         }
         
-        Log.d(TAG, "Initializing StashPayHelper");
+        Log.d(TAG, "Initializing StashHelper");
         
         StashPayCard stashPay = StashPayCard.getInstance();
         stashPay.setActivity(activity);
@@ -96,11 +96,11 @@ public class StashPayHelper {
         });
         
         isInitialized = true;
-        Log.d(TAG, "StashPayHelper initialized successfully");
+        Log.d(TAG, "StashHelper initialized successfully");
     }
     
     /**
-     * Opens the Stash Pay checkout dialog with the specified URL.
+     * Opens the Stash checkout dialog with the specified URL.
      * 
      * @param activity The current Android activity
      * @param url The checkout URL to load

@@ -4,21 +4,21 @@
 #pragma once
 
 #include "Developer/Settings/Public/ISettingsModule.h"
-#include "MobileNativeCodeEditorSettings.generated.h"
+#include "StashEditorSettings.generated.h"
 
 /**
- * Stash Pay Plugin Settings
+ * Stash Plugin Settings
  * 
  * Configuration options for the Stash Pay checkout integration.
- * Access via: Project Settings -> Plugins -> StashPay
+ * Access via: Project Settings -> Plugins -> Stash
  */
 UCLASS(config = Engine, defaultconfig)
-class UMobileNativeCodeEditorSettings : public UObject
+class UStashEditorSettings : public UObject
 {
 	GENERATED_BODY()
 
 public:
-	UMobileNativeCodeEditorSettings(const FObjectInitializer& ObjectInitializer);
+	UStashEditorSettings(const FObjectInitializer& ObjectInitializer);
 
 	static void RegisterEditorSettings(ISettingsModule* SettingsModule);
 };

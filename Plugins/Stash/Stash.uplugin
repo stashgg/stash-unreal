@@ -2,14 +2,14 @@
 	"FileVersion": 3,
 	"Version": 1,
 	"VersionName": "1.0",
-	"FriendlyName": "StashPay",
+	"FriendlyName": "Stash",
 	"Description": "Stash Pay native checkout integration for iOS and Android",
 	"Category": "Mobile",
-	"CreatedBy": "Stash",
+	"CreatedBy": "Stash Interactive Inc.",
 	"CreatedByURL": "https://stash.gg",
-	"DocsURL": "https://github.com/stashgg/stash-unreal-4",
+	"DocsURL": "https://github.com/stashgg/stash-unreal",
 	"MarketplaceURL": "",
-	"SupportURL": "https://github.com/stashgg/stash-unreal-4/issues",
+	"SupportURL": "https://github.com/stashgg/stash-unreal/issues",
 	"CanContainContent": false,
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
@@ -18,7 +18,7 @@
 	"RequiresBuildPlatform": true,
 	"Modules": [
 		{
-			"Name": "MobileNativeCode",
+			"Name": "Stash",
 			"Type": "Runtime",
 			"LoadingPhase": "Default",
 			"WhitelistPlatforms": [

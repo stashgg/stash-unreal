@@ -1,18 +1,18 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Pay Unreal Engine SDK - Android Platform Initialization
+// Stash Unreal Engine SDK - Android Platform Initialization
 
-package com.Plugins.MobileNativeCode;
+package com.Plugins.Stash;
 
 import androidx.annotation.Keep;
 
 /**
- * DeviceInfo - Platform initialization helper
+ * StashInit - Platform initialization helper
  * 
- * Provides initialization callback for the MobileNativeCode plugin
+ * Provides initialization callback for the Stash plugin
  * to verify that Java/JNI communication is working correctly.
  */
 @Keep
-public class DeviceInfo {
+public class StashInit {
 
 	/**
 	 * Platform initialization check.

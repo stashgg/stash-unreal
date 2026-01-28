@@ -11,7 +11,7 @@
  * Main module for the Stash Pay checkout integration plugin.
  * Handles platform initialization and provides support checking.
  */
-class FMobileNativeCodeModule : public IModuleInterface
+class FStashModule : public IModuleInterface
 {
 public:
 	virtual void StartupModule() override;

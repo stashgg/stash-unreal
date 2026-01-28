@@ -9,7 +9,7 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
 <root xmlns:android="http://schemas.android.com/apk/res/android">
   <!-- Initializing XML variables  ============================================================================= -->
   <init>
-    <log text="MobileNativeCode Android -> Adding properties to Manifest and Gradle"/>
+    <log text="Stash Android -> Adding properties to Manifest and Gradle"/>
     <trace enable="true"/>
     
     <dumpvars/>
@@ -34,7 +34,7 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
 
   <!-- These files are copied during build to the linker, and the dst must match package in (*. java)  =============================== -->
   <prebuildCopies>
-    <copyDir src="$S(PluginDir)/Private/Android/Java" dst="$S(BuildDir)/src/com/Plugins/MobileNativeCode" />
+    <copyDir src="$S(PluginDir)/Private/Android/Java" dst="$S(BuildDir)/src/com/Plugins/Stash" />
     <copyDir src="$S(PluginDir)/Private/Android/Java/drawable" dst="$S(BuildDir)/res/drawable" />
     <copyDir src="$S(PluginDir)/Private/Android/Java/values" dst="$S(BuildDir)/res/values" />
   </prebuildCopies>
@@ -73,7 +73,7 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
       -dontwarn com.Plugins.**
       -keep class com.Plugins.** { *; }
       -keep interface com.Plugins.** { *; }
-      -keep public class com.Plugins.MobileNativeCode.** { public protected *; }
+      -keep public class com.Plugins.Stash.** { public protected *; }
 
       -dontwarn androidx.**
       -keep class androidx.** { *; }

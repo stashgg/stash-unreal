@@ -11,8 +11,8 @@ https://github.com/EpicGames/UnrealEngine/blob/release/Engine/Source/Programs/Un
 
     <!-- =============================================================================================== -->
     <init>
-        <log text="MobileNativeCode iOS -> Adding permission to plist"/>
-        <log text="MobileNativeCode iOS -> Including Stash Pay SDK"/>
+        <log text="Stash iOS -> Adding permission to plist"/>
+        <log text="Stash iOS -> Including Stash Pay SDK"/>
         <trace enable="true"/>
 
         <dumpvars/>

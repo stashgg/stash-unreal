@@ -12,7 +12,7 @@
 	],
 	"Plugins": [
 		{
-			"Name": "MobileNativeCode",
+			"Name": "Stash",
 			"Enabled": true
 		},
 		{

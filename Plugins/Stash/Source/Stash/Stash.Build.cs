@@ -4,7 +4,7 @@
 using System.IO;
 using UnrealBuildTool;
 
-public class MobileNativeCode : ModuleRules
+public class Stash : ModuleRules
 {
 	private string ThirdPartyPath
 	{
@@ -16,7 +16,7 @@ public class MobileNativeCode : ModuleRules
 		get { return Path.GetFullPath(Path.Combine(ThirdPartyPath, "IOS/")); }
 	}
 
-	public MobileNativeCode(ReadOnlyTargetRules Target) : base(Target)
+	public Stash(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
@@ -54,7 +54,7 @@ public class MobileNativeCode : ModuleRules
 			PrivateIncludePaths.AddRange(new string[] { Path.Combine(ModuleDirectory, "Private", "Android") });
 
 			// Android build configuration via UPL
-			AdditionalPropertiesForReceipt.Add("AndroidPlugin", Path.Combine(ModuleDirectory, "MobileNativeCode_UPL_Android.xml"));
+			AdditionalPropertiesForReceipt.Add("AndroidPlugin", Path.Combine(ModuleDirectory, "Stash_UPL_Android.xml"));
 		}
 
 		// iOS platform configuration
@@ -70,7 +70,7 @@ public class MobileNativeCode : ModuleRules
 			});
 
 			// iOS build configuration via UPL
-			AdditionalPropertiesForReceipt.Add("IOSPlugin", Path.Combine(ModuleDirectory, "MobileNativeCode_UPL_iOS.xml"));
+			AdditionalPropertiesForReceipt.Add("IOSPlugin", Path.Combine(ModuleDirectory, "Stash_UPL_iOS.xml"));
 
 			PrivateIncludePaths.AddRange(new string[] { Path.Combine(ModuleDirectory, "Private", "IOS") });
 
