@@ -1,3 +1,6 @@
+// Copyright Stash. All Rights Reserved.
+// Stash Pay Unreal Engine SDK - Module Implementation
+
 #include "MobileNativeCode.h"
 #include "MobileNativeCodeEditorSettings.h"
 
@@ -5,61 +8,46 @@
 #include "Android/Utils/AndroidUtils.h"
 #endif
 
-#define LOCTEXT_NAMESPACE "FMobileNativeCodeModule"
+#define LOCTEXT_NAMESPACE "StashPayModule"
 
-/**
- * This code will be executed after loading your module into memory;
- * the exact time is specified in the .plugin file for each module.
- */
 void FMobileNativeCodeModule::StartupModule()
 {
-  // Register settings: `Settings -> Project Settings -> Plugins -> MobileNativeCode`
-  if (ISettingsModule* settingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings"))
-  {
-    UMobileNativeCodeEditorSettings::RegisterEditorSettings(settingsModule);
-  }
+	// Register settings in Project Settings -> Plugins -> StashPay
+	if (ISettingsModule* SettingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings"))
+	{
+		UMobileNativeCodeEditorSettings::RegisterEditorSettings(SettingsModule);
+	}
 
-  // Initialization for Mobile Device
-  Initialization();
+	// Initialize platform-specific components
+	Initialization();
 }
 
-/**
- * This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
- * we call this function before unloading the module.
- */
 void FMobileNativeCodeModule::ShutdownModule()
 {
-
-
-
+	// Cleanup if needed
 }
 
 void FMobileNativeCodeModule::Initialization()
 {
 #if PLATFORM_ANDROID
-  AndroidUtils::Initialization();
+	AndroidUtils::Initialization();
 #endif
 
-
 #if PLATFORM_IOS
-
+	// iOS initialization handled by StashPayCardWrapper
 #endif
 }
 
 bool FMobileNativeCodeModule::IsSupported()
 {
 #if PLATFORM_ANDROID
-  return AndroidUtils::isSupportPlatform();
+	return AndroidUtils::isSupportPlatform();
+#elif PLATFORM_IOS
+	return true;
+#else
+	return false;
 #endif
-
-
-#if PLATFORM_IOS
-  return true;
-#endif
-
-  return false;
 }
-
 
 #undef LOCTEXT_NAMESPACE
 

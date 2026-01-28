@@ -1,6 +1,7 @@
-#import "StashPayCardWrapper.h"
+// Copyright Stash. All Rights Reserved.
+// Stash Pay Unreal Engine SDK - iOS Wrapper Implementation
 
-// Import Stash Pay SDK header (copied to local ObjC folder)
+#import "StashPayCardWrapper.h"
 #import "StashPayCard.h"
 
 // Forward declaration of C++ callback functions with extern "C" linkage

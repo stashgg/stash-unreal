@@ -1,9 +1,5 @@
-//
-//  StashPayCard.h
-//  StashPay
-//
-//  Native iOS SDK for Stash Pay checkout integration.
-//
+// Copyright Stash. All Rights Reserved.
+// StashPayCard.h - Native iOS SDK for Stash Pay checkout integration.
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>

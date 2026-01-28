@@ -1,6 +1,7 @@
-#include "ObjC_Convert.h"
+// Copyright Stash. All Rights Reserved.
+// Stash Pay Unreal Engine SDK - Objective-C Type Conversion Implementation
 
-//-- ObjC Convert
+#include "ObjC_Convert.h"
 
 // NSString to FString
 FString ObjCconvert::ToFString(NSString* String)

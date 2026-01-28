@@ -1,6 +1,7 @@
-#include "JavaConvert.h"
+// Copyright Stash. All Rights Reserved.
+// Stash Pay Unreal Engine SDK - Java Type Conversion Implementation
 
-//==============Java Convert===================================
+#include "JavaConvert.h"
 
 // TArray<FString> to jobjectArray
 jobjectArray JavaConvert::ConvertToJStringArray(const TArray<FString>& stringArray)

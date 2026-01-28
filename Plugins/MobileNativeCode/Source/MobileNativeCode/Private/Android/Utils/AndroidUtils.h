@@ -1,3 +1,9 @@
+// Copyright Stash. All Rights Reserved.
+// Stash Pay Unreal Engine SDK - Android JNI Utilities
+//
+// This file provides a template-based system for calling Java methods from C++.
+// It handles automatic type conversion, signature generation, and JNI lifecycle management.
+
 #pragma once
 
 #include <Android/AndroidJNI.h>
@@ -11,8 +17,14 @@
 #include <string>
 #include <vector>
 
-
 using namespace std;
+
+/**
+ * AndroidUtils - JNI Bridge Utilities
+ * 
+ * Provides static methods for calling Java code from C++ with automatic
+ * type conversion and signature generation.
+ */
 class AndroidUtils
 
 
@@ -26,7 +38,7 @@ public:
   {
     m_supportedPlatform = true;
     m_supportedPlatform = (bool)CallJavaCode<int>(
-      "com/Plugins/MobileNativeCode/MobileNativeCode",
+      "com/Plugins/MobileNativeCode/DeviceInfo",
       "Initialization",
       "",
       false
@@ -34,20 +46,20 @@ public:
 
     if(!m_supportedPlatform)
     {
-      UE_LOG(LogTemp, Error, TEXT("MobileNativeCode -> The mobile platform is not supported, all further Java functions will not be called!"));
+      UE_LOG(LogTemp, Error, TEXT("[StashPay] Android platform initialization failed - JNI communication unavailable"));
     }
     else
     {
-      UE_LOG(LogTemp, Log, TEXT("MobileNativeCode -> Init on phone: %s"), *UMobileNativeCodeBlueprint::GetModelDevice());
+      UE_LOG(LogTemp, Log, TEXT("[StashPay] Android platform initialized successfully"));
     }
   }
 
-  //Can the mobile platform call functions
+  /** Check if the Android platform is properly initialized for JNI calls */
   static int isSupportPlatform()
   {
     if(!m_supportedPlatform)
     {
-      UE_LOG(LogTemp, Error, TEXT("MobileNativeCode -> The mobile platform is not supported, all further Java functions will not be called!"));
+      UE_LOG(LogTemp, Error, TEXT("[StashPay] Android platform not initialized - JNI calls disabled"));
     }
     return m_supportedPlatform;
   }

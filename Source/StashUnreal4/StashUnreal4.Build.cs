@@ -1,3 +1,6 @@
+// Copyright Stash. All Rights Reserved.
+// Stash Pay Unreal Engine 4 SDK Demo Project
+
 using UnrealBuildTool;
 
 public class StashUnreal4 : ModuleRules
@@ -11,13 +14,6 @@ public class StashUnreal4 : ModuleRules
             "CoreUObject",
             "Engine",
             "InputCore"
-        });
-
-        PrivateDependencyModuleNames.AddRange(new string[] {
-            "UMG",
-            "Slate",
-            "SlateCore",
-            "MobileNativeCode"
         });
     }
 }

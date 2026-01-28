@@ -1,3 +1,6 @@
+// Copyright Stash. All Rights Reserved.
+// Stash Pay Unreal Engine SDK - Objective-C Type Conversion Utilities
+
 #pragma once
 
 #include <iostream>
@@ -5,14 +8,18 @@
 
 using namespace std;
 
-//creating an alias "let" for the autotype constant
+// Type inference macros for cleaner Objective-C++ code
 #define let __auto_type const
-//creating an alias " var " for the autotype
 #define var __auto_type
 
+/**
+ * ObjCconvert - Type Conversion Utilities
+ * 
+ * Provides static methods for converting between Unreal Engine types
+ * and Objective-C types (NSString, NSMutableArray, etc.).
+ */
 class ObjCconvert
 {
-	//======= Functions for converting to ObjC types ================
 public:
 	// NSString to FString
 	static FString ToFString(NSString* String);

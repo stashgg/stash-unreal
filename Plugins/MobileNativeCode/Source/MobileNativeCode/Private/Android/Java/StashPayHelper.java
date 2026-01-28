@@ -1,3 +1,6 @@
+// Copyright Stash. All Rights Reserved.
+// Stash Pay Unreal Engine SDK - Android JNI Bridge
+
 package com.Plugins.MobileNativeCode;
 
 import android.app.Activity;

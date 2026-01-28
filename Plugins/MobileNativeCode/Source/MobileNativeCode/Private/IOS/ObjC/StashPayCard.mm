@@ -1,10 +1,5 @@
-//
-//  StashPayCard.m
-//  StashPay
-//
-//  Native iOS SDK for Stash Pay checkout integration.
-//  Ported from Unity plugin - removes Unity dependencies and uses native delegate pattern.
-//
+// Copyright Stash. All Rights Reserved.
+// StashPayCard.mm - Native iOS SDK for Stash Pay checkout integration.
 
 #import "StashPayCard.h"
 #import <SafariServices/SafariServices.h>

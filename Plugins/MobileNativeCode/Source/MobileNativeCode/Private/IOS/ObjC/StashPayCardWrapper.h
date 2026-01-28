@@ -1,9 +1,11 @@
+// Copyright Stash. All Rights Reserved.
+// Stash Pay Unreal Engine SDK - iOS Wrapper Interface
+
 #pragma once
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
-// Forward declare the callback type for C++ interop
 #ifdef __cplusplus
 extern "C" {
 #endif

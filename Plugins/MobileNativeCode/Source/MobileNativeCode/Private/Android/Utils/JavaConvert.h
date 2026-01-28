@@ -1,3 +1,6 @@
+// Copyright Stash. All Rights Reserved.
+// Stash Pay Unreal Engine SDK - Java Type Conversion Utilities
+
 #pragma once
 
 #include <Android/AndroidJNI.h>
@@ -9,12 +12,15 @@
 
 using namespace std;
 
-
-
+/**
+ * JavaConvert - Type Conversion Utilities
+ * 
+ * Provides static methods for converting between Unreal Engine types
+ * and Java JNI types (arrays, strings, primitives).
+ */
 class JavaConvert
 {
 public:
-	//======= Functions for converting to Java types ==================
 
 	// TArray<FString> to jobjectArray
 	static jobjectArray ConvertToJStringArray(const TArray<FString>& stringArray);

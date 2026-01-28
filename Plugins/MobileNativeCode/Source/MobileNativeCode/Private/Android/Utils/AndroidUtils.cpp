@@ -1,7 +1,7 @@
+// Copyright Stash. All Rights Reserved.
+// Stash Pay Unreal Engine SDK - Android JNI Utilities Implementation
+
 #include "AndroidUtils.h"
 
-/**
- * Template functions must be in .h
- */
-
+// Static member initialization
 bool AndroidUtils::m_supportedPlatform = false;

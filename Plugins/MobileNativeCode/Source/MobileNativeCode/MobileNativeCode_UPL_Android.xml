@@ -37,8 +37,6 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
     <copyDir src="$S(PluginDir)/Private/Android/Java" dst="$S(BuildDir)/src/com/Plugins/MobileNativeCode" />
     <copyDir src="$S(PluginDir)/Private/Android/Java/drawable" dst="$S(BuildDir)/res/drawable" />
     <copyDir src="$S(PluginDir)/Private/Android/Java/values" dst="$S(BuildDir)/res/values" />
-    <!-- Copy Stash Pay SDK source files -->
-    <copyDir src="$S(PluginDir)/../../../../stash-native-main/Android" dst="$S(BuildDir)/src/stash-native-main/Android" />
   </prebuildCopies>
 
 
@@ -225,14 +223,15 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
   <settingsGradleAdditions>
     <insert>
       include ':stashpay'
-      project(':stashpay').projectDir = new File('src/stash-native-main/Android/stashpay')
+      project(':stashpay').projectDir = new File('stashpay')
     </insert>
   </settingsGradleAdditions>
 
 
   <!-- optional files or directories to copy or delete from Intermediate/Android/APK before Gradle -->
   <gradleCopies>
-
+    <!-- Copy Stash Pay SDK source files into gradle folder -->
+    <copyDir src="$S(PluginDir)/../../../stash-native-main/Android/stashpay" dst="$S(BuildDir)/gradle/stashpay" />
   </gradleCopies>
 
 

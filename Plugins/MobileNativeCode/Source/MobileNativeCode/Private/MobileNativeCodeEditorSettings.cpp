@@ -1,19 +1,21 @@
+// Copyright Stash. All Rights Reserved.
+// Stash Pay Unreal Engine SDK - Editor Settings Implementation
+
 #include "MobileNativeCodeEditorSettings.h"
 
-#define LOCTEXT_NAMESPACE "FMobileNativeCodeModule"
+#define LOCTEXT_NAMESPACE "StashPayModule"
 
 UMobileNativeCodeEditorSettings::UMobileNativeCodeEditorSettings(const FObjectInitializer& ObjectInitializer)
-    : Super(ObjectInitializer)
+	: Super(ObjectInitializer)
 {
 }
 
-//----------------------------------------------------------------------
-void UMobileNativeCodeEditorSettings::RegisterEditorSettings(ISettingsModule* settingsModule)
+void UMobileNativeCodeEditorSettings::RegisterEditorSettings(ISettingsModule* SettingsModule)
 {
-  settingsModule->RegisterSettings("Project", "Plugins", "MobileNativeCode",
-    LOCTEXT("RuntimeSettingsName", "MobileNativeCode"),
-    LOCTEXT("RuntimeSettingsDescription", "Configure bundle(plugin)"),
-    GetMutableDefault<UMobileNativeCodeEditorSettings>());
+	SettingsModule->RegisterSettings("Project", "Plugins", "StashPay",
+		LOCTEXT("SettingsName", "StashPay"),
+		LOCTEXT("SettingsDescription", "Configure Stash Pay checkout integration"),
+		GetMutableDefault<UMobileNativeCodeEditorSettings>());
 }
 
 #undef LOCTEXT_NAMESPACE
