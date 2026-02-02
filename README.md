@@ -205,7 +205,8 @@ void AYourPlayerController::OnStashNetworkError()
 2. Use the **Open Checkout** node from the Stash category
 3. Connect the checkout URL string to the node
 
-![Checkout Blueprint Example](.github/blueprint_checkout.png)
+![Checkout Blueprint Example](https://github.com/stashgg/stash-unreal/blob/4.27-plus/.github/blueprint_checkout.png?raw=true)
+
 
 **Opening the Modal:**
 
@@ -213,7 +214,7 @@ void AYourPlayerController::OnStashNetworkError()
 2. Use the **Open Modal** node from the Stash category
 3. Connect the URL string to the node
 
-![Modal Blueprint Example](.github/blueprint_modal.png)
+![Modal Blueprint Example](https://github.com/stashgg/stash-unreal/blob/4.27-plus/.github/blueprint_modal.png?raw=true)
 
 **Listening to Payment Callbacks:**
 
