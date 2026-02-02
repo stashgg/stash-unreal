@@ -205,6 +205,16 @@ void AYourPlayerController::OnStashNetworkError()
 2. Use the **Open Checkout** node from the Stash category
 3. Connect the checkout URL string to the node
 
+![Checkout Blueprint Example](.github/blueprint_checkout.png)
+
+**Opening the Modal:**
+
+1. Get the URL for the modal content
+2. Use the **Open Modal** node from the Stash category
+3. Connect the URL string to the node
+
+![Modal Blueprint Example](.github/blueprint_modal.png)
+
 **Listening to Payment Callbacks:**
 
 The payment delegates are static and require C++ binding. To use them in Blueprints:
