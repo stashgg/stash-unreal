@@ -27,6 +27,7 @@ public class StashHelper {
     public static native void nativeOnPaymentSuccess();
     public static native void nativeOnPaymentFailure();
     public static native void nativeOnDialogDismissed();
+    public static native void nativeOnOptInResponse(String optinType);
     public static native void nativeOnPageLoaded(long loadTimeMs);
     public static native void nativeOnNetworkError();
     
@@ -94,7 +95,11 @@ public class StashHelper {
             @Override
             public void onOptInResponse(String optinType) {
                 Log.d(TAG, "Opt-in received: " + optinType);
-                // Opt-in handling can be extended if needed
+                try {
+                    nativeOnOptInResponse(optinType != null ? optinType : "");
+                } catch (Exception e) {
+                    Log.e(TAG, "Error calling native onOptInResponse: " + e.getMessage());
+                }
             }
             
             @Override

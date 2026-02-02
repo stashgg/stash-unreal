@@ -24,28 +24,4 @@ https://github.com/EpicGames/UnrealEngine/blob/release/Engine/Source/Programs/Un
                  dst="$S(BuildDir)/Frameworks/StashPay.xcframework" />
     </copyFiles>
 
-    <!-- =============================================================================================== -->
-    <iosPListUpdates>
-        <!-- Permission -->
-        <addElements tag="dict" once="true">
-            <key>UISupportedInterfaceOrientations</key>
-            <array>
-                <string>UIInterfaceOrientationPortrait</string>
-                <string>UIInterfaceOrientationLandscapeLeft</string>
-                <string>UIInterfaceOrientationLandscapeRight</string>
-            </array>
-            
-            <key>UISupportedInterfaceOrientations~ipad</key>
-            <array>
-                <string>UIInterfaceOrientationPortrait</string>
-                <string>UIInterfaceOrientationPortraitUpsideDown</string>
-                <string>UIInterfaceOrientationLandscapeLeft</string>
-                <string>UIInterfaceOrientationLandscapeRight</string>
-            </array>
-
-            <!-- end -->
-        </addElements>
-
-    </iosPListUpdates>
-
 </root>

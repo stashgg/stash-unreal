@@ -49,6 +49,9 @@ tabletHeightRatioLandscape:(float)tabletHeightLandscape;
 - (void)setTabletHeightRatioLandscape:(float)ratio;
 - (void)setForceWebBasedCheckout:(BOOL)force;
 
+/** When YES, app is restricted to landscape when checkout is not open; portrait is allowed when checkout is open (for Stash Pay phone checkout). Call at startup for landscape-only games. */
+- (void)setLandscapeLockWhenCheckoutClosed:(BOOL)enable;
+
 @end
 
 #ifdef __cplusplus

@@ -18,6 +18,7 @@
 FOnStashPaymentSuccess UStashBlueprint::OnPaymentSuccess;
 FOnStashPaymentFailure UStashBlueprint::OnPaymentFailure;
 FOnStashDialogDismissed UStashBlueprint::OnDialogDismissed;
+FOnStashOptInResponse UStashBlueprint::OnOptInResponse;
 FOnStashPageLoaded UStashBlueprint::OnPageLoaded;
 FOnStashNetworkError UStashBlueprint::OnNetworkError;
 
@@ -198,6 +199,16 @@ void UStashBlueprint::SetForceWebBasedCheckout(bool bForce)
 #endif
 }
 
+void UStashBlueprint::SetLandscapeLockWhenCheckoutClosed(bool bEnable)
+{
+#if PLATFORM_IOS
+	[[StashPayCardWrapper sharedInstance] setLandscapeLockWhenCheckoutClosed:bEnable];
+#else
+	// Android: no-op; orientation lock is handled by project/activity settings
+	(void)bEnable;
+#endif
+}
+
 // Callback handlers - called from native code
 void UStashBlueprint::HandlePaymentSuccess()
 {
@@ -220,6 +231,14 @@ void UStashBlueprint::HandleDialogDismissed()
 	UE_LOG(LogStash, Log, TEXT("[Stash] Dialog dismissed callback received"));
 	AsyncTask(ENamedThreads::GameThread, []() {
 		OnDialogDismissed.Broadcast();
+	});
+}
+
+void UStashBlueprint::HandleOptInResponse(const FString& OptInType)
+{
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opt-in response received: %s"), *OptInType);
+	AsyncTask(ENamedThreads::GameThread, [OptInType]() {
+		OnOptInResponse.Broadcast(OptInType);
 	});
 }
 
@@ -257,6 +276,11 @@ extern "C" {
 		UStashBlueprint::HandleDialogDismissed();
 	}
 	
+	void StashPayOnOptInResponse(const char* optinType)
+	{
+		UStashBlueprint::HandleOptInResponse(FString(UTF8_TO_TCHAR(optinType ? optinType : "")));
+	}
+	
 	void StashPayOnPageLoaded(double loadTimeMs)
 	{
 		UStashBlueprint::HandlePageLoaded((float)loadTimeMs);
@@ -285,6 +309,21 @@ extern "C" {
 	JNIEXPORT void JNICALL Java_com_Plugins_Stash_StashHelper_nativeOnDialogDismissed(JNIEnv* env, jclass clazz)
 	{
 		UStashBlueprint::HandleDialogDismissed();
+	}
+	
+	JNIEXPORT void JNICALL Java_com_Plugins_Stash_StashHelper_nativeOnOptInResponse(JNIEnv* env, jclass clazz, jstring optinType)
+	{
+		FString OptInTypeStr;
+		if (optinType)
+		{
+			const char* UTFString = env->GetStringUTFChars(optinType, nullptr);
+			if (UTFString)
+			{
+				OptInTypeStr = FString(UTF8_TO_TCHAR(UTFString));
+				env->ReleaseStringUTFChars(optinType, UTFString);
+			}
+		}
+		UStashBlueprint::HandleOptInResponse(OptInTypeStr);
 	}
 	
 	JNIEXPORT void JNICALL Java_com_Plugins_Stash_StashHelper_nativeOnPageLoaded(JNIEnv* env, jclass clazz, jlong loadTimeMs)

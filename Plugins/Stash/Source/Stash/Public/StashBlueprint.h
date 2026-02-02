@@ -11,6 +11,7 @@
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashPaymentSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashPaymentFailure);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashDialogDismissed);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStashOptInResponse, FString, OptInType);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStashPageLoaded, float, LoadTimeMs);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashNetworkError);
 
@@ -185,6 +186,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Stash")
 	static void SetForceWebBasedCheckout(bool bForce);
 
+	/**
+	 * (iOS) When enabled, the app stays in landscape when checkout is not open; portrait is allowed only while Stash Pay checkout is displayed (required for phone checkout). Call at game startup for landscape-only games. No effect on Android.
+	 * @param bEnable true to lock to landscape when checkout closed, false to use default orientations
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Stash")
+	static void SetLandscapeLockWhenCheckoutClosed(bool bEnable);
+
 	// ========================================================================
 	// Delegates - Bind to these to receive payment callbacks
 	// ========================================================================
@@ -198,10 +206,13 @@ public:
 	/** Called when the checkout dialog is dismissed by the user */
 	static FOnStashDialogDismissed OnDialogDismissed;
 	
+	/** Called when an opt-in response is received (modal payment channel selection) */
+	static FOnStashOptInResponse OnOptInResponse;
+	
 	/** Called when the checkout page finishes loading */
 	static FOnStashPageLoaded OnPageLoaded;
 
-	/** Called when a network error occurs during initial page load (SDK 1.2.0+) */
+	/** Called when a network error occurs during initial page load */
 	static FOnStashNetworkError OnNetworkError;
 	
 	// ========================================================================
@@ -210,6 +221,7 @@ public:
 	static void HandlePaymentSuccess();
 	static void HandlePaymentFailure();
 	static void HandleDialogDismissed();
+	static void HandleOptInResponse(const FString& OptInType);
 	static void HandlePageLoaded(float LoadTimeMs);
 	static void HandleNetworkError();
 };

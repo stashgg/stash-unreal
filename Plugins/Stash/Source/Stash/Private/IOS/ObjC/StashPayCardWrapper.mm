@@ -3,12 +3,14 @@
 
 #import "StashPayCardWrapper.h"
 #import <StashPay/StashPay.h>
+#import <objc/runtime.h>
 
 // Forward declaration of C++ callback functions
 extern "C" {
     void StashPayOnPaymentSuccess(void);
     void StashPayOnPaymentFailure(void);
     void StashPayOnDialogDismissed(void);
+    void StashPayOnOptInResponse(const char* optinType);
     void StashPayOnPageLoaded(double loadTimeMs);
     void StashPayOnNetworkError(void);
 }
@@ -36,8 +38,8 @@ extern "C" {
 }
 
 - (void)stashPayCardDidReceiveOptIn:(NSString *)optinType {
-    // Opt-in responses are handled via dismiss callback
-    (void)optinType;
+    const char* utf8 = optinType ? [optinType UTF8String] : "";
+    if (utf8) StashPayOnOptInResponse(utf8);
 }
 
 - (void)stashPayCardDidLoadPage:(double)loadTimeMs {
@@ -49,6 +51,132 @@ extern "C" {
 }
 
 @end
+
+#pragma mark - Landscape Lock (supportedInterfaceOrientations)
+
+static BOOL _landscapeLockWhenCheckoutClosed = NO;
+static NSUInteger (*OriginalRootVCSupportedOrientations)(id, SEL) = NULL;
+static NSUInteger (*OriginalDelegateSupportedOrientationsForWindow)(id, SEL, UIApplication*, UIWindow*) = NULL;
+static Class _swizzledRootVCClass = nil;
+
+static UIWindow* StashMainGameWindow(void) {
+    UIApplication* app = [UIApplication sharedApplication];
+    for (UIWindow* w in app.windows) {
+        if (w.rootViewController != nil && w.windowLevel == UIWindowLevelNormal)
+            return w;
+    }
+    if (@available(iOS 15.0, *)) {
+        for (UIScene* scene in app.connectedScenes) {
+            if ([scene isKindOfClass:[UIWindowScene class]]) {
+                UIWindowScene* ws = (UIWindowScene*)scene;
+                if (ws.activationState == UISceneActivationStateForegroundActive) {
+                    for (UIWindow* w in ws.windows) {
+                        if (w.rootViewController != nil && w.windowLevel == UIWindowLevelNormal)
+                            return w;
+                    }
+                }
+            }
+        }
+    }
+    return nil;
+}
+
+static NSUInteger StashRootVCSupportedInterfaceOrientations(UIViewController* self, SEL _cmd) {
+    if (!_landscapeLockWhenCheckoutClosed) {
+        if (OriginalRootVCSupportedOrientations) return OriginalRootVCSupportedOrientations(self, _cmd);
+        return UIInterfaceOrientationMaskAll;
+    }
+    BOOL checkoutOpen = [[StashPayCard sharedInstance] isCurrentlyPresented];
+    UIWindow* w = self.view.window;
+    if (checkoutOpen && w && w.windowLevel >= UIWindowLevelAlert) {
+        return UIInterfaceOrientationMaskAll;
+    }
+    return UIInterfaceOrientationMaskLandscapeLeft | UIInterfaceOrientationMaskLandscapeRight;
+}
+
+static NSUInteger StashDelegateSupportedOrientationsForWindow(id self, SEL _cmd, UIApplication* app, UIWindow* window) {
+    if (!_landscapeLockWhenCheckoutClosed) {
+        if (OriginalDelegateSupportedOrientationsForWindow) return OriginalDelegateSupportedOrientationsForWindow(self, _cmd, app, window);
+        return UIInterfaceOrientationMaskAll;
+    }
+    BOOL checkoutOpen = [[StashPayCard sharedInstance] isCurrentlyPresented];
+    if (checkoutOpen && window && window.windowLevel >= UIWindowLevelAlert) {
+        return UIInterfaceOrientationMaskAll;
+    }
+    return UIInterfaceOrientationMaskLandscapeLeft | UIInterfaceOrientationMaskLandscapeRight;
+}
+
+static void InstallAppDelegateOrientationHook(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        id<UIApplicationDelegate> delegate = [UIApplication sharedApplication].delegate;
+        if (delegate) {
+            Class dClass = [delegate class];
+            SEL dSel = @selector(application:supportedInterfaceOrientationsForWindow:);
+            Method dM = class_getInstanceMethod(dClass, dSel);
+            if (dM) {
+                OriginalDelegateSupportedOrientationsForWindow = (NSUInteger(*)(id, SEL, UIApplication*, UIWindow*))method_getImplementation(dM);
+                method_setImplementation(dM, (IMP)StashDelegateSupportedOrientationsForWindow);
+            } else {
+                class_addMethod(dClass, dSel, (IMP)StashDelegateSupportedOrientationsForWindow, "Q@:@@");
+            }
+        }
+    });
+}
+
+static void TryInstallRootVCOrientationHookAndRetry(int attempt);
+
+static void TryInstallRootVCOrientationHook(void) {
+    UIWindow* mainWindow = StashMainGameWindow();
+    UIViewController* rootVC = mainWindow.rootViewController;
+    if (!rootVC) {
+        TryInstallRootVCOrientationHookAndRetry(0);
+        return;
+    }
+    Class vcClass = [rootVC class];
+    if (vcClass == _swizzledRootVCClass) {
+        [UIViewController attemptRotationToDeviceOrientation];
+        return;
+    }
+    SEL sel = @selector(supportedInterfaceOrientations);
+    Method m = class_getInstanceMethod(vcClass, sel);
+    if (m) {
+        OriginalRootVCSupportedOrientations = (NSUInteger(*)(id, SEL))method_getImplementation(m);
+        method_setImplementation(m, (IMP)StashRootVCSupportedInterfaceOrientations);
+        _swizzledRootVCClass = vcClass;
+        [UIViewController attemptRotationToDeviceOrientation];
+    }
+}
+
+static const int kLandscapeLockMaxRetries = 15;
+static const NSTimeInterval kLandscapeLockRetryInterval = 0.2;
+
+static void TryInstallRootVCOrientationHookAndRetry(int attempt) {
+    if (attempt >= kLandscapeLockMaxRetries) return;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kLandscapeLockRetryInterval * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        UIViewController* rootVC = StashMainGameWindow().rootViewController;
+        if (rootVC) {
+            Class vcClass = [rootVC class];
+            if (vcClass != _swizzledRootVCClass) {
+                SEL sel = @selector(supportedInterfaceOrientations);
+                Method m = class_getInstanceMethod(vcClass, sel);
+                if (m) {
+                    OriginalRootVCSupportedOrientations = (NSUInteger(*)(id, SEL))method_getImplementation(m);
+                    method_setImplementation(m, (IMP)StashRootVCSupportedInterfaceOrientations);
+                    _swizzledRootVCClass = vcClass;
+                }
+            }
+            [UIViewController attemptRotationToDeviceOrientation];
+        } else {
+            TryInstallRootVCOrientationHookAndRetry(attempt + 1);
+        }
+    });
+}
+
+static void InstallLandscapeLockHooks(void) {
+    InstallAppDelegateOrientationHook();
+    TryInstallRootVCOrientationHook();
+}
 
 #pragma mark - StashPayCardWrapper Implementation
 
@@ -161,6 +289,16 @@ tabletHeightRatioLandscape:(float)tabletHeightLandscape {
 
 - (void)setForceWebBasedCheckout:(BOOL)force {
     [StashPayCard sharedInstance].forceWebBasedCheckout = force;
+}
+
+- (void)setLandscapeLockWhenCheckoutClosed:(BOOL)enable {
+    _landscapeLockWhenCheckoutClosed = enable;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        InstallLandscapeLockHooks();
+        if (enable) {
+            [UIViewController attemptRotationToDeviceOrientation];
+        }
+    });
 }
 
 @end
