@@ -3,14 +3,7 @@
 
 #pragma once
 
-#include <iostream>
 #include <string>
-
-using namespace std;
-
-// Type inference macros for cleaner Objective-C++ code
-#define let __auto_type const
-#define var __auto_type
 
 /**
  * ObjCconvert - Type Conversion Utilities
@@ -25,21 +18,21 @@ public:
 	static FString ToFString(NSString* String);
 
 	// NSString to std::string
-	static string ToString(NSString* String);
+	static std::string ToString(NSString* String);
 
-	// NSMutableDictionary* to TArray<FString>
+	// NSMutableArray* to TArray<FString>
 	static TArray<FString> NSMutableArrayToTArrayFString(NSMutableArray* mArray);
 
-	// NSMutableDictionary* to TArray<int>
+	// NSMutableArray* to TArray<int>
 	static TArray<int> NSMutableArrayToTArrayInt(NSMutableArray* mArray);
 
-	// NSMutableDictionary* to TArray<float>
+	// NSMutableArray* to TArray<float>
 	static TArray<float> NSMutableArrayToTArrayFloat(NSMutableArray* mArray);
 
-	// TArray<FString> to NSMutableDictionary*
+	// TArray<FString> to NSMutableArray*
 	static NSMutableArray* TArrayFStringToNSMutableArray(TArray<FString> mArray);
 
-	// TArray<anyTypeNumber> to NSMutableDictionary*
+	// TArray<anyTypeNumber> to NSMutableArray*
 	template<typename anyType>
 	static NSMutableArray* TArrayNumToNSMutableArray(TArray<anyType> mArray);
 };

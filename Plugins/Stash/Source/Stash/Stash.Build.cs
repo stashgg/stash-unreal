@@ -11,11 +11,6 @@ public class Stash : ModuleRules
 		get { return Path.GetFullPath(Path.Combine(ModuleDirectory, "ThirdParty/")); }
 	}
 
-	private string PathThirdPartyIOS
-	{
-		get { return Path.GetFullPath(Path.Combine(ThirdPartyPath, "IOS/")); }
-	}
-
 	public Stash(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
@@ -28,13 +23,6 @@ public class Stash : ModuleRules
 			"Engine",
 			"Core",
 			"CoreUObject",
-			"InputCore",
-		});
-
-		PrivateDependencyModuleNames.AddRange(new string[]
-		{
-			"Slate",
-			"SlateCore"
 		});
 
 		LoadLib(Target);
@@ -84,6 +72,19 @@ public class Stash : ModuleRules
 				"SafariServices",
 				"QuartzCore",
 			});
+
+			// Add pre-built StashPay XCFramework
+			string XCFrameworkPath = Path.Combine(ThirdPartyPath, "iOS", "StashPay.xcframework");
+			if (Directory.Exists(XCFrameworkPath))
+			{
+				// For UE4.27+, use PublicAdditionalFrameworks with the ios-arm64 framework inside the xcframework
+				string FrameworkPath = Path.Combine(XCFrameworkPath, "ios-arm64", "StashPay.framework");
+				PublicAdditionalFrameworks.Add(new Framework("StashPay", FrameworkPath, null, true));
+				
+				// Add framework headers to include path for #import <StashPay/StashPayCard.h>
+				string HeaderPath = Path.Combine(FrameworkPath, "Headers");
+				PublicIncludePaths.Add(HeaderPath);
+			}
 		}
 	}
 }

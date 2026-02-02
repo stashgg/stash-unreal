@@ -35,8 +35,6 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
   <!-- These files are copied during build to the linker, and the dst must match package in (*. java)  =============================== -->
   <prebuildCopies>
     <copyDir src="$S(PluginDir)/Private/Android/Java" dst="$S(BuildDir)/src/com/Plugins/Stash" />
-    <copyDir src="$S(PluginDir)/Private/Android/Java/drawable" dst="$S(BuildDir)/res/drawable" />
-    <copyDir src="$S(PluginDir)/Private/Android/Java/values" dst="$S(BuildDir)/res/values" />
   </prebuildCopies>
 
 
@@ -74,6 +72,11 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
       -keep class com.Plugins.** { *; }
       -keep interface com.Plugins.** { *; }
       -keep public class com.Plugins.Stash.** { public protected *; }
+
+      <!-- Stash Pay SDK classes -->
+      -dontwarn com.stash.**
+      -keep class com.stash.** { *; }
+      -keep interface com.stash.** { *; }
 
       -dontwarn androidx.**
       -keep class androidx.** { *; }
@@ -144,7 +147,9 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
 
       repositories {
         mavenCentral()
-        jcenter()
+        flatDir {
+          dirs 'libs'
+        }
       }
     </insert>
 
@@ -160,8 +165,8 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
 
       implementation 'androidx.work:work-runtime:2.7.1'
       
-      // Stash Pay SDK - include stashpay module from submodule
-      implementation project(':stashpay')
+      // Stash Pay SDK - pre-built AAR
+      implementation(name: 'StashPay', ext: 'aar')
       
       // Dependencies required by Stash Pay SDK
       implementation 'androidx.browser:browser:1.4.0'
@@ -219,19 +224,9 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
 
   </buildscriptGradleAdditions>
 
-  <!-- Add stash-native stashpay module to settings.gradle -->
-  <settingsGradleAdditions>
-    <insert>
-      include ':stashpay'
-      project(':stashpay').projectDir = new File('stashpay')
-    </insert>
-  </settingsGradleAdditions>
-
-
-  <!-- optional files or directories to copy or delete from Intermediate/Android/APK before Gradle -->
+  <!-- Copy pre-built Stash Pay AAR to gradle project libs folder -->
   <gradleCopies>
-    <!-- Copy Stash Pay SDK source files into gradle folder -->
-    <copyDir src="$S(PluginDir)/../../../stash-native-main/Android/stashpay" dst="$S(BuildDir)/gradle/stashpay" />
+    <copyFile src="$S(PluginDir)/ThirdParty/Android/StashPay.aar" dst="$S(BuildDir)/gradle/app/libs/StashPay.aar" />
   </gradleCopies>
 
 

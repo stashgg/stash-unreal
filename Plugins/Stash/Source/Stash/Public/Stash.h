@@ -5,6 +5,9 @@
 
 #include "Modules/ModuleManager.h"
 
+// Custom log category for Stash plugin
+DECLARE_LOG_CATEGORY_EXTERN(LogStash, Log, All);
+
 /**
  * Stash Pay Module
  * 

@@ -11,12 +11,12 @@ FString ObjCconvert::ToFString(NSString* String)
 }
 
 // NSString to std::string
-string ObjCconvert::ToString(NSString* String)
+std::string ObjCconvert::ToString(NSString* String)
 {
 	return std::string([String UTF8String]);	
 }
 
-// NSMutableDictionary* to TArray<FString>
+// NSMutableArray* to TArray<FString>
 TArray<FString> ObjCconvert::NSMutableArrayToTArrayFString (NSMutableArray* mArray)
 {
 	TArray<FString> TmpArr;
@@ -26,7 +26,7 @@ TArray<FString> ObjCconvert::NSMutableArrayToTArrayFString (NSMutableArray* mArr
 	return TmpArr;
 }
 
-// NSMutableDictionary* to TArray<int>
+// NSMutableArray* to TArray<int>
 TArray<int> ObjCconvert::NSMutableArrayToTArrayInt(NSMutableArray* mArray)
 {
 	TArray<int> TmpArr;
@@ -36,7 +36,7 @@ TArray<int> ObjCconvert::NSMutableArrayToTArrayInt(NSMutableArray* mArray)
 	return TmpArr;
 }
 
-// NSMutableDictionary* to TArray<float>
+// NSMutableArray* to TArray<float>
 TArray<float> ObjCconvert::NSMutableArrayToTArrayFloat(NSMutableArray* mArray)
 {
 	TArray<float> TmpArr;
@@ -46,7 +46,7 @@ TArray<float> ObjCconvert::NSMutableArrayToTArrayFloat(NSMutableArray* mArray)
 	return TmpArr;
 }
 
-// TArray<FString> to NSMutableDictionary* 
+// TArray<FString> to NSMutableArray* 
 NSMutableArray* ObjCconvert::TArrayFStringToNSMutableArray(TArray<FString> mArray)
 {
 	NSMutableArray* mMutableArray = [NSMutableArray array];
@@ -56,7 +56,7 @@ NSMutableArray* ObjCconvert::TArrayFStringToNSMutableArray(TArray<FString> mArra
 	return mMutableArray;
 }
 
-// TArray<anyTypeNumber> to NSMutableDictionary*
+// TArray<anyTypeNumber> to NSMutableArray*
 template<typename anyType>
 NSMutableArray* ObjCconvert::TArrayNumToNSMutableArray(TArray<anyType> mArray)
 {

@@ -99,6 +99,7 @@ TArray<uint8> JavaConvert::ConvertToByteArray(jbyteArray javaArray)
   {
     byteArray.Add(javaByte[i]);
   }
+  Env->ReleaseByteArrayElements(javaArray, javaByte, 0);
   return byteArray;
 }
 
@@ -113,6 +114,7 @@ TArray<float> JavaConvert::ConvertToFloatArray(jfloatArray javaArray)
   {
     floatArray.Add((float)javaFloat[i]);
   }
+  Env->ReleaseFloatArrayElements(javaArray, javaFloat, 0);
   return floatArray;
 }
 
@@ -127,6 +129,7 @@ TArray<int> JavaConvert::ConvertToIntArray(jintArray javaArray)
   {
     numArray.Add((int)javaNum[i]);
   }
+  Env->ReleaseIntArrayElements(javaArray, javaNum, 0);
   return numArray;
 }
 
@@ -141,6 +144,7 @@ TArray<long> JavaConvert::ConvertToLongArray(jlongArray javaArray)
   {
     longArray.Add((long)javaLong[i]);
   }
+  Env->ReleaseLongArrayElements(javaArray, javaLong, 0);
   return longArray;
 }
 
@@ -173,8 +177,8 @@ jstring JavaConvert::GetJavaString(const FString& string)
   return GetJavaString(TCHAR_TO_UTF8(*string));
 }
 
-// string to jstring
-jstring JavaConvert::GetJavaString(const string& str)
+// std::string to jstring
+jstring JavaConvert::GetJavaString(const std::string& str)
 {
   return GetJavaString(str.c_str());
 }
@@ -198,8 +202,8 @@ FString JavaConvert::FromJavaFString(jstring javaString)
   return Result;
 }
 
-// jstring to string
-string JavaConvert::FromJavaString(jstring javaString)
+// jstring to std::string
+std::string JavaConvert::FromJavaString(jstring javaString)
 {
   JNIEnv* Env = AndroidJavaEnv::GetJavaEnv();
   const char* UTFString = Env->GetStringUTFChars(javaString, nullptr);
@@ -207,5 +211,5 @@ string JavaConvert::FromJavaString(jstring javaString)
   Env->ReleaseStringUTFChars(javaString, UTFString);
   Env->DeleteLocalRef(javaString);
 
-  return string(TCHAR_TO_UTF8(*Result));
+  return std::string(TCHAR_TO_UTF8(*Result));
 }

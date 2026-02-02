@@ -7,10 +7,7 @@
 #include <Android/AndroidApplication.h>
 #include <Android/AndroidJava.h>
 
-#include <iostream>
 #include <string>
-
-using namespace std;
 
 /**
  * JavaConvert - Type Conversion Utilities
@@ -61,8 +58,8 @@ public:
 	// FString to jstring
 	static jstring GetJavaString(const FString& string);
 
-	// string to jstring
-	static jstring GetJavaString(const string& str);
+	// std::string to jstring
+	static jstring GetJavaString(const std::string& str);
 
 	// const char* to jstring
 	static jstring GetJavaString(const char* str);
@@ -70,6 +67,6 @@ public:
 	// jstring to FString
 	static FString FromJavaFString(jstring javaString);
 
-	// jstring to string
-	static string FromJavaString(jstring javaString);
+	// jstring to std::string
+	static std::string FromJavaString(jstring javaString);
 };

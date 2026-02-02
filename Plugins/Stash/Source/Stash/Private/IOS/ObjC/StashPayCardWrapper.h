@@ -11,34 +11,43 @@ extern "C" {
 #endif
 
 /**
- * StashPayCardWrapper - Objective-C wrapper for Stash Pay iOS SDK
- * 
- * This class bridges the Stash Pay native iOS SDK with Unreal Engine.
- * It provides singleton access and handles delegate callbacks.
+ * Objective-C wrapper for Stash Pay iOS SDK.
+ * Bridges the native iOS SDK with Unreal Engine C++ code.
  */
 @interface StashPayCardWrapper : NSObject
 
-/**
- * Returns the shared singleton instance.
- */
 + (StashPayCardWrapper*)sharedInstance;
 
-/**
- * Opens the Stash Pay checkout dialog with the specified URL.
- * @param urlString The checkout URL to load
- */
+#pragma mark - Checkout
+
 - (void)openCheckoutWithURL:(NSString*)urlString;
-
-/**
- * Checks if the checkout dialog is currently open.
- * @return YES if the checkout is currently displayed
- */
 - (BOOL)isCheckoutOpen;
-
-/**
- * Dismisses the currently displayed checkout dialog.
- */
 - (void)dismissCheckout;
+
+#pragma mark - Modal
+
+- (void)openModalWithURL:(NSString*)urlString;
+
+- (void)openModalWithURL:(NSString*)urlString
+              showDragBar:(BOOL)showDragBar
+             allowDismiss:(BOOL)allowDismiss
+   phoneWidthRatioPortrait:(float)phoneWidthPortrait
+  phoneHeightRatioPortrait:(float)phoneHeightPortrait
+  phoneWidthRatioLandscape:(float)phoneWidthLandscape
+ phoneHeightRatioLandscape:(float)phoneHeightLandscape
+  tabletWidthRatioPortrait:(float)tabletWidthPortrait
+ tabletHeightRatioPortrait:(float)tabletHeightPortrait
+ tabletWidthRatioLandscape:(float)tabletWidthLandscape
+tabletHeightRatioLandscape:(float)tabletHeightLandscape;
+
+#pragma mark - Configuration
+
+- (void)setCardHeightRatioPortrait:(float)ratio;
+- (void)setTabletWidthRatioPortrait:(float)ratio;
+- (void)setTabletHeightRatioPortrait:(float)ratio;
+- (void)setTabletWidthRatioLandscape:(float)ratio;
+- (void)setTabletHeightRatioLandscape:(float)ratio;
+- (void)setForceWebBasedCheckout:(BOOL)force;
 
 @end
 

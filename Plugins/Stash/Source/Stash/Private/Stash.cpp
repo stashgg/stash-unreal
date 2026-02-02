@@ -8,6 +8,9 @@
 #include "Android/Utils/AndroidUtils.h"
 #endif
 
+// Define the log category declared in Stash.h
+DEFINE_LOG_CATEGORY(LogStash);
+
 #define LOCTEXT_NAMESPACE "StashModule"
 
 void FStashModule::StartupModule()
@@ -24,7 +27,9 @@ void FStashModule::StartupModule()
 
 void FStashModule::ShutdownModule()
 {
-	// Cleanup if needed
+	// No cleanup needed - native SDKs handle their own lifecycle
+	// iOS: StashPayCardWrapper is a singleton that persists
+	// Android: StashPayCard is a singleton managed by the SDK
 }
 
 void FStashModule::Initialization()

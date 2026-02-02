@@ -3,9 +3,9 @@
 > **For Unreal Engine 5:**  
 > This is a sample for Unreal Engine 4.27+. For new projects, we recommend using Unreal Engine 5 with our actively maintained SDK. See the [main branch](https://github.com/stashgg/stash-unreal) for UE5 support.
 
-Seamlessly integrate the Stash Pay native in-app purchase dialog with Unreal Engine 4 using the Stash plugin and the Stash Native SDK.
+Seamlessly integrate the Stash Pay native in-app purchase dialog with Unreal Engine 4 using the Stash plugin.
 
-This repository contains the Stash plugin configured for Stash Pay. Follow the setup guide below to add Stash Pay integration to your Unreal Engine 4.27+ project.
+This repository contains the Stash plugin configured for Stash Pay with **pre-built native SDKs** for iOS and Android. Follow the setup guide below to add Stash Pay integration to your Unreal Engine 4.27+ project.
 
 
 ## Prerequisites
@@ -35,23 +35,25 @@ Unreal Engine (C++/Blueprints)
          ↓
     Stash Plugin (Wrapper)
          ↓
-Stash Native SDK (iOS/Android)
+Pre-built Native SDKs (iOS/Android)
 ```
 
 **Components:**
 
-1. **Stash Plugin** - Unreal Engine plugin providing Blueprint and C++ access to the Stash Native SDK. Located at `Plugins/Stash/`.
-2. **[Stash Native SDK](https://github.com/stashgg/stash-native)** - Native iOS/Android implementation of the Stash Pay checkout dialog.
+1. **Stash Plugin** - Unreal Engine plugin providing Blueprint and C++ access to the Stash Pay SDK. Located at `Plugins/Stash/`.
+2. **Pre-built Native SDKs** - Pre-compiled iOS XCFramework and Android AAR bundled in `Plugins/Stash/Source/Stash/ThirdParty/`.
+
+**Native SDK Version:** 1.2.1 ([stash-native releases](https://github.com/stashgg/stash-native/releases))
 
 ## Quick Setup
 
-After cloning this repository, initialize the Git submodules:
+This repository includes pre-built native SDKs - no additional setup required. Simply clone and open in Unreal Engine 4.27+.
 
 ```bash
-git submodule update --init --recursive
+git clone https://github.com/stashgg/stash-unreal.git
+cd stash-unreal
+# Open StashUnreal4.uproject in Unreal Engine
 ```
-
-This command will download the Stash Native SDK into the `Plugins/stash-native-main/` directory. The repository includes a minimal UE 4.27+ project configured with the Stash plugin ready to use.
 
 
 ## Setup in Clean / Existing Unreal Project
@@ -60,33 +62,23 @@ Follow these steps to integrate Stash Pay into your own Unreal Engine 4.27+ proj
 
 ### 1. Add Stash Plugin
 
-Copy the `Plugins/Stash/` folder from this repository to your project's `Plugins/` directory (create it if needed). This includes all necessary wrappers for the Stash Native SDK.
+Copy the `Plugins/Stash/` folder from this repository to your project's `Plugins/` directory (create it if needed). This includes:
+- All wrapper code for iOS and Android
+- Pre-built native SDKs in `ThirdParty/` directory
 
-### 2. Add Stash Native SDK
-
-Add the Stash Native SDK as a Git submodule / folder in your project:
-
-```bash
-cd YourProject
-git submodule add https://github.com/stashgg/stash-native.git Plugins/stash-native-main
-```
-
-> **Keep the folder structure as shown in this sample project.**  
-> The Stash plugin wrappers are configured to call into the Stash SDK located at `Plugins/stash-native-main`. If you change the folder name or location, you will need to update wrapper references accordingly.
-
-### 3. Enable Plugin
+### 2. Enable Plugin
 
 1. Open your project in Unreal Engine
 2. Go to **Edit → Plugins → Installed → Mobile → Stash**
 3. Enable the plugin and restart the editor
 
-### 4. Verify Setup
+### 3. Verify Setup
 
 1. Open the Level Blueprint
 2. You should be able to call Stash Blueprint functions from the "Stash" category
 3. Package for Android or iOS to test native integration
 
-### 5. Using the SDK - Show Checkout & Listen to Callbacks
+### 4. Using the SDK - Show Checkout & Listen to Callbacks
 
 Once the plugin is set up, you can integrate Stash Pay checkout into your game using either C++ or Blueprints.
 
@@ -149,6 +141,62 @@ void AYourPlayerController::OnStashDialogDismissed()
 }
 ```
 
+**Using Modal Presentation (SDK 1.2.0+):**
+
+```cpp
+#include "StashBlueprint.h"
+
+void AYourPlayerController::OpenStashModal(const FString& URL)
+{
+    // Open with default configuration
+    UStashBlueprint::OpenModal(URL);
+    
+    // Or with custom configuration
+    FStashModalConfig Config;
+    Config.bShowDragBar = true;
+    Config.bAllowDismiss = true;
+    Config.PhoneWidthRatioPortrait = 0.95f;
+    Config.PhoneHeightRatioPortrait = 0.8f;
+    
+    UStashBlueprint::OpenModalWithConfig(URL, Config);
+}
+```
+
+**Opening Checkout with Custom Sizing (SDK 1.2.0+):**
+
+```cpp
+#include "StashBlueprint.h"
+
+void AYourPlayerController::OpenCustomCheckout(const FString& CheckoutURL)
+{
+    // Open checkout with custom sizing in a single call
+    FStashCheckoutConfig Config;
+    Config.CardHeightRatioPortrait = 0.7f;       // Phone card height
+    Config.TabletWidthRatioPortrait = 0.5f;      // Tablet width in portrait
+    Config.TabletHeightRatioPortrait = 0.7f;     // Tablet height in portrait
+    Config.TabletWidthRatioLandscape = 0.8f;     // Tablet width in landscape
+    Config.TabletHeightRatioLandscape = 0.65f;   // Tablet height in landscape
+    
+    UStashBlueprint::OpenCheckoutWithConfig(CheckoutURL, Config);
+}
+
+// Use web-based checkout instead of in-app UI
+UStashBlueprint::SetForceWebBasedCheckout(true);
+```
+
+**Handling Network Errors (SDK 1.2.0+):**
+
+```cpp
+// In BeginPlay(), add network error binding
+UStashBlueprint::OnNetworkError.AddDynamic(this, &AYourPlayerController::OnStashNetworkError);
+
+void AYourPlayerController::OnStashNetworkError()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Network error during checkout load"));
+    // Show offline message, retry option, etc.
+}
+```
+
 #### Blueprint Implementation
 
 **Opening the Checkout:**
@@ -199,11 +247,26 @@ Use the **Dismiss Checkout** node to programmatically close the checkout dialog.
 
 #### API Reference
 
+**Core Functions:**
+
 | Function | Description |
 |----------|-------------|
-| `OpenCheckout(CheckoutURL)` | Opens the Stash Pay checkout dialog (cross-platform) |
+| `OpenCheckout(CheckoutURL)` | Opens the Stash Pay checkout dialog with default sizing |
+| `OpenCheckoutWithConfig(CheckoutURL, Config)` | Opens checkout with custom sizing configuration |
 | `IsCheckoutOpen()` | Returns true if checkout is currently displayed |
 | `DismissCheckout()` | Closes the checkout dialog |
+| `SetForceWebBasedCheckout(bForce)` | Use Safari/Chrome instead of in-app UI |
+
+**Modal Presentation (SDK 1.2.0+):**
+
+| Function | Description |
+|----------|-------------|
+| `OpenModal(URL)` | Opens a URL in a centered modal dialog with default settings |
+| `OpenModalWithConfig(URL, Config)` | Opens a URL in a centered modal with custom configuration |
+
+Unlike `OpenCheckout` which uses different presentations on phones vs tablets, `OpenModal` always shows a centered modal on all devices.
+
+**Delegates:**
 
 | Delegate | Description |
 |----------|-------------|
@@ -211,10 +274,36 @@ Use the **Dismiss Checkout** node to programmatically close the checkout dialog.
 | `OnPaymentFailure` | Called when payment fails |
 | `OnDialogDismissed` | Called when user dismisses the checkout |
 | `OnPageLoaded(LoadTimeMs)` | Called when checkout page finishes loading |
+| `OnNetworkError` | Called when a network error occurs during page load (SDK 1.2.0+) |
+
+**FStashCheckoutConfig Properties:**
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `CardHeightRatioPortrait` | 0.68 | Phone card height in portrait (68%) |
+| `TabletWidthRatioPortrait` | 0.6 | Tablet card width in portrait (60%) |
+| `TabletHeightRatioPortrait` | 0.8 | Tablet card height in portrait (80%) |
+| `TabletWidthRatioLandscape` | 0.8 | Tablet card width in landscape (80%) |
+| `TabletHeightRatioLandscape` | 0.65 | Tablet card height in landscape (65%) |
+
+**FStashModalConfig Properties:**
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `bShowDragBar` | true | Show visual drag bar at top of modal |
+| `bAllowDismiss` | true | Allow tap-outside and drag gestures to dismiss |
+| `PhoneWidthRatioPortrait` | 0.9 | Phone width in portrait (90%) |
+| `PhoneHeightRatioPortrait` | 0.7 | Phone height in portrait (70%) |
+| `PhoneWidthRatioLandscape` | 0.7 | Phone width in landscape (70%) |
+| `PhoneHeightRatioLandscape` | 0.85 | Phone height in landscape (85%) |
+| `TabletWidthRatioPortrait` | 0.6 | Tablet width in portrait (60%) |
+| `TabletHeightRatioPortrait` | 0.7 | Tablet height in portrait (70%) |
+| `TabletWidthRatioLandscape` | 0.5 | Tablet width in landscape (50%) |
+| `TabletHeightRatioLandscape` | 0.8 | Tablet height in landscape (80%) |
 
 ## Requirements
 
-- Unreal Engine 4.27-plus
+- Unreal Engine 4.27+
 - Visual Studio (for Windows/Android development)
 - Xcode with iOS SDK (for iOS development)
 - Android SDK (for Android builds)
@@ -228,9 +317,19 @@ Use the **Dismiss Checkout** node to programmatically close the checkout dialog.
 - `Plugins/Stash/Source/Stash/Private/IOS/ObjC/StashPayCardWrapper.mm` - iOS wrapper
 - `Plugins/Stash/Source/Stash/Private/Android/Java/StashHelper.java` - Android wrapper
 
-**Native SDK:**
-- `Plugins/stash-native-main/iOS/` - iOS implementation
-- `Plugins/stash-native-main/Android/` - Android implementation
+**Pre-built Native SDKs:**
+- `Plugins/Stash/Source/Stash/ThirdParty/Android/StashPay.aar` - Android library
+- `Plugins/Stash/Source/Stash/ThirdParty/iOS/StashPay.xcframework/` - iOS framework
+
+## Updating the Native SDK
+
+To update the pre-built native SDKs to a newer version:
+
+1. Download the latest release from [stash-native releases](https://github.com/stashgg/stash-native/releases)
+2. Replace the files in `Plugins/Stash/Source/Stash/ThirdParty/`:
+   - Android: `StashPay.aar`
+   - iOS: Extract `StashPay.xcframework.zip` to `iOS/StashPay.xcframework/`
+3. Perform a clean rebuild of your project
 
 ## Documentation
 
@@ -240,9 +339,19 @@ Use the **Dismiss Checkout** node to programmatically close the checkout dialog.
 ## Troubleshooting
 
 If you encounter issues with the plugin, ensure:
-1. The `Plugins/stash-native-main/` submodule is properly initialized
-2. You've done a clean rebuild after adding the plugin
-3. Your build targets the correct platform (Android arm64-v8a or iOS)
+1. The pre-built SDKs exist in `Plugins/Stash/Source/Stash/ThirdParty/`
+2. You've done a clean rebuild after adding the plugin (`rm -rf Intermediate Binaries Saved/StagedBuilds`)
+3. Your build targets the correct platform (Android arm64-v8a or iOS arm64)
+
+### Common Issues
+
+**Android build fails with missing class:**
+- Ensure `StashPay.aar` exists in `ThirdParty/Android/`
+- Check that ProGuard rules include `com.stash.**` classes
+
+**iOS build fails with framework not found:**
+- Ensure `StashPay.xcframework` directory exists in `ThirdParty/iOS/`
+- Verify the framework contains the `ios-arm64` architecture
 
 ## Support
 

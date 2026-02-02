@@ -18,18 +18,16 @@ https://github.com/EpicGames/UnrealEngine/blob/release/Engine/Source/Programs/Un
         <dumpvars/>
     </init>
 
-    <!-- Copy Stash Pay SDK source files -->
+    <!-- Copy pre-built StashPay XCFramework -->
     <copyFiles>
-        <copyDir src="$S(PluginDir)/../../../../stash-native-main/iOS/StashPay/Sources/StashPay" 
-                 dst="$S(BuildDir)/StashPay" />
+        <copyDir src="$S(PluginDir)/ThirdParty/iOS/StashPay.xcframework" 
+                 dst="$S(BuildDir)/Frameworks/StashPay.xcframework" />
     </copyFiles>
 
     <!-- =============================================================================================== -->
     <iosPListUpdates>
         <!-- Permission -->
         <addElements tag="dict" once="true">
-            <!-- Stash Pay requires portrait orientation support for checkout -->
-            <!-- This ensures the app can rotate to portrait when showing checkout -->
             <key>UISupportedInterfaceOrientations</key>
             <array>
                 <string>UIInterfaceOrientationPortrait</string>
