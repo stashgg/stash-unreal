@@ -43,8 +43,6 @@ Pre-built Native SDKs (iOS/Android)
 1. **Stash Plugin** - Unreal Engine plugin providing Blueprint and C++ access to the Stash Pay SDK. Located at `Plugins/Stash/`.
 2. **Pre-built Native SDKs** - Pre-compiled iOS XCFramework and Android AAR bundled in `Plugins/Stash/Source/Stash/ThirdParty/`.
 
-**Native SDK Version:** 1.2.1 ([stash-native releases](https://github.com/stashgg/stash-native/releases))
-
 ## Quick Setup
 
 This repository includes pre-built native SDKs - no additional setup required. Simply clone and open in Unreal Engine 4.27+.
@@ -78,27 +76,103 @@ Copy the `Plugins/Stash/` folder from this repository to your project's `Plugins
 2. You should be able to call Stash Blueprint functions from the "Stash" category
 3. Package for Android or iOS to test native integration
 
-### 4. Using the SDK - Show Checkout & Listen to Callbacks
+## Usage
 
-Once the plugin is set up, you can integrate Stash Pay checkout into your game using either C++ or Blueprints.
+The Stash SDK provides two presentation methods:
+
+- **Checkout** - For Stash Pay checkout URLs (payment flows)
+- **Modal** - For Stash Pay opt-in modals (payment channel selection)
+
+Both methods work on iOS and Android and can be opened with default settings or custom configuration.
+
+---
+
+### How to Use Checkout
+
+**Checkout** is used for displaying Stash Pay checkout URLs where users complete their purchase.
 
 #### C++ Implementation
 
-**Opening the Checkout:**
+**Open with default settings:**
 
 ```cpp
 #include "StashBlueprint.h"
 
 void AYourPlayerController::OpenStashCheckout(const FString& CheckoutURL)
 {
-    // Cross-platform - works on both iOS and Android
     UStashBlueprint::OpenCheckout(CheckoutURL);
 }
 ```
 
-**Listening to Payment Callbacks:**
+**Open with custom settings:**
 
-Bind to the payment delegates in your controller's `BeginPlay()` or initialization code:
+```cpp
+void AYourPlayerController::OpenCustomCheckout(const FString& CheckoutURL)
+{
+    FStashCheckoutConfig Config;
+    Config.CardHeightRatioPortrait = 0.7f;       // Phone card height
+    Config.TabletWidthRatioPortrait = 0.5f;      // Tablet width in portrait
+    Config.TabletHeightRatioPortrait = 0.7f;     // Tablet height in portrait
+    Config.TabletWidthRatioLandscape = 0.8f;     // Tablet width in landscape
+    Config.TabletHeightRatioLandscape = 0.65f;   // Tablet height in landscape
+    
+    UStashBlueprint::OpenCheckoutWithConfig(CheckoutURL, Config);
+}
+```
+
+#### Blueprint Implementation
+
+Use the **Open Checkout** or **Open Checkout With Config** nodes from the Stash category:
+
+![Checkout Blueprint Example](.github/blueprint_checkout.png)
+
+---
+
+### How to Use Modal
+
+**Modal** is used for displaying Stash Pay opt-in modals where users select their preferred payment channel.
+
+#### C++ Implementation
+
+**Open with default settings:**
+
+```cpp
+#include "StashBlueprint.h"
+
+void AYourPlayerController::OpenStashModal(const FString& URL)
+{
+    UStashBlueprint::OpenModal(URL);
+}
+```
+
+**Open with custom settings:**
+
+```cpp
+void AYourPlayerController::OpenCustomModal(const FString& URL)
+{
+    FStashModalConfig Config;
+    Config.bShowDragBar = true;
+    Config.bAllowDismiss = true;
+    Config.PhoneWidthRatioPortrait = 0.95f;
+    Config.PhoneHeightRatioPortrait = 0.8f;
+    
+    UStashBlueprint::OpenModalWithConfig(URL, Config);
+}
+```
+
+#### Blueprint Implementation
+
+Use the **Open Modal** or **Open Modal With Config** nodes from the Stash category:
+
+![Modal Blueprint Example](.github/blueprint_modal.png)
+
+---
+
+### Listening to Callbacks
+
+Bind to payment delegates to handle success, failure, and dismissal events.
+
+#### C++ Implementation
 
 ```cpp
 // In your PlayerController.h
@@ -111,120 +185,52 @@ void OnStashPaymentFailure();
 UFUNCTION()
 void OnStashDialogDismissed();
 
+UFUNCTION()
+void OnStashNetworkError();
+
 // In your PlayerController.cpp BeginPlay()
 void AYourPlayerController::BeginPlay()
 {
     Super::BeginPlay();
     
-    // Bind to Stash delegates
     UStashBlueprint::OnPaymentSuccess.AddDynamic(this, &AYourPlayerController::OnStashPaymentSuccess);
     UStashBlueprint::OnPaymentFailure.AddDynamic(this, &AYourPlayerController::OnStashPaymentFailure);
     UStashBlueprint::OnDialogDismissed.AddDynamic(this, &AYourPlayerController::OnStashDialogDismissed);
+    UStashBlueprint::OnNetworkError.AddDynamic(this, &AYourPlayerController::OnStashNetworkError);
 }
 
 void AYourPlayerController::OnStashPaymentSuccess()
 {
-    UE_LOG(LogTemp, Log, TEXT("Stash payment succeeded!"));
-    // Grant items to the player, show success UI, etc.
+    UE_LOG(LogTemp, Log, TEXT("Payment succeeded!"));
+    // Grant items to the player
 }
 
 void AYourPlayerController::OnStashPaymentFailure()
 {
-    UE_LOG(LogTemp, Warning, TEXT("Stash payment failed"));
+    UE_LOG(LogTemp, Warning, TEXT("Payment failed"));
     // Handle payment failure
 }
 
 void AYourPlayerController::OnStashDialogDismissed()
 {
-    UE_LOG(LogTemp, Log, TEXT("Stash checkout dialog was dismissed"));
+    UE_LOG(LogTemp, Log, TEXT("Dialog dismissed"));
     // Handle dialog dismissal
 }
-```
-
-**Using Modal Presentation (SDK 1.2.0+):**
-
-```cpp
-#include "StashBlueprint.h"
-
-void AYourPlayerController::OpenStashModal(const FString& URL)
-{
-    // Open with default configuration
-    UStashBlueprint::OpenModal(URL);
-    
-    // Or with custom configuration
-    FStashModalConfig Config;
-    Config.bShowDragBar = true;
-    Config.bAllowDismiss = true;
-    Config.PhoneWidthRatioPortrait = 0.95f;
-    Config.PhoneHeightRatioPortrait = 0.8f;
-    
-    UStashBlueprint::OpenModalWithConfig(URL, Config);
-}
-```
-
-**Opening Checkout with Custom Sizing (SDK 1.2.0+):**
-
-```cpp
-#include "StashBlueprint.h"
-
-void AYourPlayerController::OpenCustomCheckout(const FString& CheckoutURL)
-{
-    // Open checkout with custom sizing in a single call
-    FStashCheckoutConfig Config;
-    Config.CardHeightRatioPortrait = 0.7f;       // Phone card height
-    Config.TabletWidthRatioPortrait = 0.5f;      // Tablet width in portrait
-    Config.TabletHeightRatioPortrait = 0.7f;     // Tablet height in portrait
-    Config.TabletWidthRatioLandscape = 0.8f;     // Tablet width in landscape
-    Config.TabletHeightRatioLandscape = 0.65f;   // Tablet height in landscape
-    
-    UStashBlueprint::OpenCheckoutWithConfig(CheckoutURL, Config);
-}
-
-// Use web-based checkout instead of in-app UI
-UStashBlueprint::SetForceWebBasedCheckout(true);
-```
-
-**Handling Network Errors (SDK 1.2.0+):**
-
-```cpp
-// In BeginPlay(), add network error binding
-UStashBlueprint::OnNetworkError.AddDynamic(this, &AYourPlayerController::OnStashNetworkError);
 
 void AYourPlayerController::OnStashNetworkError()
 {
-    UE_LOG(LogTemp, Warning, TEXT("Network error during checkout load"));
-    // Show offline message, retry option, etc.
+    UE_LOG(LogTemp, Warning, TEXT("Network error"));
+    // Show offline message
 }
 ```
 
 #### Blueprint Implementation
 
-**Opening the Checkout:**
-
-1. Get the checkout URL from your server
-2. Use the **Open Checkout** node from the Stash category
-3. Connect the checkout URL string to the node
-
-![Checkout Blueprint Example](https://github.com/stashgg/stash-unreal/blob/4.27-plus/.github/blueprint_checkout.png?raw=true)
-
-
-**Opening the Modal:**
-
-1. Get the URL for the modal content
-2. Use the **Open Modal** node from the Stash category
-3. Connect the URL string to the node
-
-![Modal Blueprint Example](https://github.com/stashgg/stash-unreal/blob/4.27-plus/.github/blueprint_modal.png?raw=true)
-
-**Listening to Payment Callbacks:**
-
-The payment delegates are static and require C++ binding. To use them in Blueprints:
+Delegates require C++ binding. To use them in Blueprints:
 
 1. Create a C++ PlayerController that binds to the delegates (as shown above)
-2. Create Blueprint implementable events that can be called from C++
-3. Call your Blueprint events from the C++ callback handlers
-
-**Example pattern:**
+2. Create Blueprint implementable events in your C++ class
+3. Call Blueprint events from C++ callback handlers
 
 ```cpp
 // In your C++ PlayerController header
@@ -248,34 +254,26 @@ void AYourPlayerController::OnStashPaymentFailure()
 
 Then implement `OnPaymentSucceeded` and `OnPaymentFailed` as events in your Blueprint.
 
-**Checking Checkout Status:**
+---
 
-Use the **Is Checkout Open** node to check if the checkout dialog is currently displayed.
+### API Reference
 
-**Closing the Checkout:**
-
-Use the **Dismiss Checkout** node to programmatically close the checkout dialog.
-
-#### API Reference
-
-**Core Functions:**
+**Checkout Functions:**
 
 | Function | Description |
 |----------|-------------|
-| `OpenCheckout(CheckoutURL)` | Opens the Stash Pay checkout dialog with default sizing |
-| `OpenCheckoutWithConfig(CheckoutURL, Config)` | Opens checkout with custom sizing configuration |
-| `IsCheckoutOpen()` | Returns true if checkout is currently displayed |
+| `OpenCheckout(CheckoutURL)` | Opens checkout with default settings |
+| `OpenCheckoutWithConfig(CheckoutURL, Config)` | Opens checkout with custom settings |
+| `IsCheckoutOpen()` | Returns true if checkout is displayed |
 | `DismissCheckout()` | Closes the checkout dialog |
 | `SetForceWebBasedCheckout(bForce)` | Use Safari/Chrome instead of in-app UI |
 
-**Modal Presentation (SDK 1.2.0+):**
+**Modal Functions:**
 
 | Function | Description |
 |----------|-------------|
-| `OpenModal(URL)` | Opens a URL in a centered modal dialog with default settings |
-| `OpenModalWithConfig(URL, Config)` | Opens a URL in a centered modal with custom configuration |
-
-Unlike `OpenCheckout` which uses different presentations on phones vs tablets, `OpenModal` always shows a centered modal on all devices.
+| `OpenModal(URL)` | Opens modal with default settings |
+| `OpenModalWithConfig(URL, Config)` | Opens modal with custom settings |
 
 **Delegates:**
 
@@ -283,34 +281,36 @@ Unlike `OpenCheckout` which uses different presentations on phones vs tablets, `
 |----------|-------------|
 | `OnPaymentSuccess` | Called when payment completes successfully |
 | `OnPaymentFailure` | Called when payment fails |
-| `OnDialogDismissed` | Called when user dismisses the checkout |
-| `OnPageLoaded(LoadTimeMs)` | Called when checkout page finishes loading |
-| `OnNetworkError` | Called when a network error occurs during page load (SDK 1.2.0+) |
+| `OnDialogDismissed` | Called when user dismisses the dialog |
+| `OnPageLoaded(LoadTimeMs)` | Called when page finishes loading |
+| `OnNetworkError` | Called when a network error occurs |
 
 **FStashCheckoutConfig Properties:**
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `CardHeightRatioPortrait` | 0.68 | Phone card height in portrait (68%) |
-| `TabletWidthRatioPortrait` | 0.6 | Tablet card width in portrait (60%) |
-| `TabletHeightRatioPortrait` | 0.8 | Tablet card height in portrait (80%) |
-| `TabletWidthRatioLandscape` | 0.8 | Tablet card width in landscape (80%) |
-| `TabletHeightRatioLandscape` | 0.65 | Tablet card height in landscape (65%) |
+| `CardHeightRatioPortrait` | 0.68 | Phone card height in portrait |
+| `TabletWidthRatioPortrait` | 0.6 | Tablet width in portrait |
+| `TabletHeightRatioPortrait` | 0.8 | Tablet height in portrait |
+| `TabletWidthRatioLandscape` | 0.8 | Tablet width in landscape |
+| `TabletHeightRatioLandscape` | 0.65 | Tablet height in landscape |
 
 **FStashModalConfig Properties:**
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `bShowDragBar` | true | Show visual drag bar at top of modal |
-| `bAllowDismiss` | true | Allow tap-outside and drag gestures to dismiss |
-| `PhoneWidthRatioPortrait` | 0.9 | Phone width in portrait (90%) |
-| `PhoneHeightRatioPortrait` | 0.7 | Phone height in portrait (70%) |
-| `PhoneWidthRatioLandscape` | 0.7 | Phone width in landscape (70%) |
-| `PhoneHeightRatioLandscape` | 0.85 | Phone height in landscape (85%) |
-| `TabletWidthRatioPortrait` | 0.6 | Tablet width in portrait (60%) |
-| `TabletHeightRatioPortrait` | 0.7 | Tablet height in portrait (70%) |
-| `TabletWidthRatioLandscape` | 0.5 | Tablet width in landscape (50%) |
-| `TabletHeightRatioLandscape` | 0.8 | Tablet height in landscape (80%) |
+| `bShowDragBar` | true | Show visual drag bar at top |
+| `bAllowDismiss` | true | Allow tap-outside to dismiss |
+| `PhoneWidthRatioPortrait` | 0.9 | Phone width in portrait |
+| `PhoneHeightRatioPortrait` | 0.7 | Phone height in portrait |
+| `PhoneWidthRatioLandscape` | 0.7 | Phone width in landscape |
+| `PhoneHeightRatioLandscape` | 0.85 | Phone height in landscape |
+| `TabletWidthRatioPortrait` | 0.6 | Tablet width in portrait |
+| `TabletHeightRatioPortrait` | 0.7 | Tablet height in portrait |
+| `TabletWidthRatioLandscape` | 0.5 | Tablet width in landscape |
+| `TabletHeightRatioLandscape` | 0.8 | Tablet height in landscape |
+
+---
 
 ## Requirements
 
