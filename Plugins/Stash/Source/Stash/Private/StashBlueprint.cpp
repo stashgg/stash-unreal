@@ -22,6 +22,28 @@ FOnStashOptInResponse UStashBlueprint::OnOptInResponse;
 FOnStashPageLoaded UStashBlueprint::OnPageLoaded;
 FOnStashNetworkError UStashBlueprint::OnNetworkError;
 
+FStashCheckoutConfig UStashBlueprint::MakeStashCheckoutConfig(
+	bool bForcePortraitOnCheckout,
+	float CardHeightRatioPortrait,
+	float CardWidthRatioLandscape,
+	float CardHeightRatioLandscape,
+	float TabletWidthRatioPortrait,
+	float TabletHeightRatioPortrait,
+	float TabletWidthRatioLandscape,
+	float TabletHeightRatioLandscape)
+{
+	FStashCheckoutConfig Config;
+	Config.bForcePortraitOnCheckout = bForcePortraitOnCheckout;
+	Config.CardHeightRatioPortrait = FMath::Clamp(CardHeightRatioPortrait, 0.1f, 1.0f);
+	Config.CardWidthRatioLandscape = FMath::Clamp(CardWidthRatioLandscape, 0.1f, 1.0f);
+	Config.CardHeightRatioLandscape = FMath::Clamp(CardHeightRatioLandscape, 0.1f, 1.0f);
+	Config.TabletWidthRatioPortrait = FMath::Clamp(TabletWidthRatioPortrait, 0.1f, 1.0f);
+	Config.TabletHeightRatioPortrait = FMath::Clamp(TabletHeightRatioPortrait, 0.1f, 1.0f);
+	Config.TabletWidthRatioLandscape = FMath::Clamp(TabletWidthRatioLandscape, 0.1f, 1.0f);
+	Config.TabletHeightRatioLandscape = FMath::Clamp(TabletHeightRatioLandscape, 0.1f, 1.0f);
+	return Config;
+}
+
 void UStashBlueprint::OpenCheckout(const FString& CheckoutURL)
 {
 #if PLATFORM_IOS
@@ -46,9 +68,12 @@ void UStashBlueprint::OpenCheckoutWithConfig(const FString& CheckoutURL, const F
 #if PLATFORM_IOS
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening checkout with config on iOS: %s"), *CheckoutURL);
 	
-	// Apply sizing configuration
+	// Apply checkout configuration
 	StashPayCardWrapper* wrapper = [StashPayCardWrapper sharedInstance];
+	[wrapper setForcePortraitOnCheckout:Config.bForcePortraitOnCheckout];
 	[wrapper setCardHeightRatioPortrait:FMath::Clamp(Config.CardHeightRatioPortrait, 0.1f, 1.0f)];
+	[wrapper setCardWidthRatioLandscape:FMath::Clamp(Config.CardWidthRatioLandscape, 0.1f, 1.0f)];
+	[wrapper setCardHeightRatioLandscape:FMath::Clamp(Config.CardHeightRatioLandscape, 0.1f, 1.0f)];
 	[wrapper setTabletWidthRatioPortrait:FMath::Clamp(Config.TabletWidthRatioPortrait, 0.1f, 1.0f)];
 	[wrapper setTabletHeightRatioPortrait:FMath::Clamp(Config.TabletHeightRatioPortrait, 0.1f, 1.0f)];
 	[wrapper setTabletWidthRatioLandscape:FMath::Clamp(Config.TabletWidthRatioLandscape, 0.1f, 1.0f)];
@@ -59,9 +84,15 @@ void UStashBlueprint::OpenCheckoutWithConfig(const FString& CheckoutURL, const F
 #elif PLATFORM_ANDROID
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening checkout with config on Android: %s"), *CheckoutURL);
 	
-	// Apply sizing configuration
+	// Apply checkout configuration
+	AndroidUtils::CallJavaCode<void>("com/Plugins/Stash/StashHelper", "SetForcePortraitOnCheckout", "", false,
+		Config.bForcePortraitOnCheckout);
 	AndroidUtils::CallJavaCode<void>("com/Plugins/Stash/StashHelper", "SetCardHeightRatioPortrait", "", false,
 		FMath::Clamp(Config.CardHeightRatioPortrait, 0.1f, 1.0f));
+	AndroidUtils::CallJavaCode<void>("com/Plugins/Stash/StashHelper", "SetCardWidthRatioLandscape", "", false,
+		FMath::Clamp(Config.CardWidthRatioLandscape, 0.1f, 1.0f));
+	AndroidUtils::CallJavaCode<void>("com/Plugins/Stash/StashHelper", "SetCardHeightRatioLandscape", "", false,
+		FMath::Clamp(Config.CardHeightRatioLandscape, 0.1f, 1.0f));
 	AndroidUtils::CallJavaCode<void>("com/Plugins/Stash/StashHelper", "SetTabletWidthRatioPortrait", "", false,
 		FMath::Clamp(Config.TabletWidthRatioPortrait, 0.1f, 1.0f));
 	AndroidUtils::CallJavaCode<void>("com/Plugins/Stash/StashHelper", "SetTabletHeightRatioPortrait", "", false,

@@ -174,14 +174,33 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) BOOL isPurchaseProcessing;
 
 // ============================================================================
-// Orientation-Specific Phone Card Size Configuration
+// Checkout Orientation and Phone Card Size Configuration
 // ============================================================================
 
 /**
- * Phone card height ratio (0.0 to 1.0). The phone card is always portrait and full screen width.
+ * When YES (default), phone checkout forces portrait orientation.
+ * When NO, phone checkout is shown in current orientation (slide from bottom); in landscape
+ * uses cardWidthRatioLandscape and cardHeightRatioLandscape.
+ */
+@property (nonatomic, assign) BOOL forcePortraitOnCheckout;
+
+/**
+ * Phone card height ratio in portrait (0.0 to 1.0). Portrait phone card is full screen width.
  * Default is 0.68 (68% of screen height).
  */
 @property (nonatomic, assign) CGFloat cardHeightRatioPortrait;
+
+/**
+ * Phone card width ratio in landscape (0.1 to 1.0). Used when forcePortraitOnCheckout is NO.
+ * Default is 0.9 (90% of screen width).
+ */
+@property (nonatomic, assign) CGFloat cardWidthRatioLandscape;
+
+/**
+ * Phone card height ratio in landscape (0.1 to 1.0). Used when forcePortraitOnCheckout is NO.
+ * Default is 0.6 (60% of screen height).
+ */
+@property (nonatomic, assign) CGFloat cardHeightRatioLandscape;
 
 // ============================================================================
 // Orientation-Specific Tablet (iPad) Card Size Configuration

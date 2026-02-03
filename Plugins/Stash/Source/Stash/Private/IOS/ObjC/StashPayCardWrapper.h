@@ -42,7 +42,10 @@ tabletHeightRatioLandscape:(float)tabletHeightLandscape;
 
 #pragma mark - Configuration
 
+- (void)setForcePortraitOnCheckout:(BOOL)force;
 - (void)setCardHeightRatioPortrait:(float)ratio;
+- (void)setCardWidthRatioLandscape:(float)ratio;
+- (void)setCardHeightRatioLandscape:(float)ratio;
 - (void)setTabletWidthRatioPortrait:(float)ratio;
 - (void)setTabletHeightRatioPortrait:(float)ratio;
 - (void)setTabletWidthRatioLandscape:(float)ratio;

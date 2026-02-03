@@ -18,7 +18,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashNetworkError);
 /**
  * Configuration for Stash Pay checkout presentation.
  * 
- * Checkout uses card presentation on phones (full width, configurable height)
+ * Checkout uses card presentation on phones (full width, configurable height in portrait;
+ * when force portrait is off, phone landscape uses configurable width/height ratios)
  * and centered cards on tablets (configurable width and height).
  */
 USTRUCT(BlueprintType)
@@ -26,24 +27,36 @@ struct FStashCheckoutConfig
 {
 	GENERATED_BODY()
 
+	/** When true, phone checkout is portrait-only; when false, checkout appears in current orientation with landscape sizing. Default false. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash")
+	bool bForcePortraitOnCheckout = false;
+
 	/** Phone card height ratio for portrait (0.1-1.0). Default 0.68. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float CardHeightRatioPortrait = 0.68f;
 
+	/** Phone card width ratio for landscape (0.1-1.0). Used when Force Portrait On Checkout is false. Default 0.9. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	float CardWidthRatioLandscape = 0.9f;
+
+	/** Phone card height ratio for landscape (0.1-1.0). Used when Force Portrait On Checkout is false. Default 0.6. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	float CardHeightRatioLandscape = 0.6f;
+
 	/** Tablet width ratio for portrait (0.1-1.0). Default 0.6. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float TabletWidthRatioPortrait = 0.6f;
 
 	/** Tablet height ratio for portrait (0.1-1.0). Default 0.8. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float TabletHeightRatioPortrait = 0.8f;
 
 	/** Tablet width ratio for landscape (0.1-1.0). Default 0.8. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float TabletWidthRatioLandscape = 0.8f;
 
 	/** Tablet height ratio for landscape (0.1-1.0). Default 0.65. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float TabletHeightRatioLandscape = 0.65f;
 };
 
@@ -114,6 +127,31 @@ public:
 	UStashBlueprint(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer) {};
 
 	/**
+	 * Builds a checkout config with all options. Use this in Blueprint to get a config with force portrait and phone landscape sizing.
+	 * 
+	 * @param bForcePortraitOnCheckout When true, phone checkout is portrait-only; when false, uses current orientation and landscape ratios.
+	 * @param CardHeightRatioPortrait Phone card height in portrait (0.1-1.0).
+	 * @param CardWidthRatioLandscape Phone card width in landscape when force portrait off (0.1-1.0).
+	 * @param CardHeightRatioLandscape Phone card height in landscape when force portrait off (0.1-1.0).
+	 * @param TabletWidthRatioPortrait Tablet width in portrait (0.1-1.0).
+	 * @param TabletHeightRatioPortrait Tablet height in portrait (0.1-1.0).
+	 * @param TabletWidthRatioLandscape Tablet width in landscape (0.1-1.0).
+	 * @param TabletHeightRatioLandscape Tablet height in landscape (0.1-1.0).
+	 */
+	/** Use this node in Blueprint to build checkout config with Force Portrait and phone landscape sizing. All pins show by default. */
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Make Stash Checkout Config"))
+	static FStashCheckoutConfig MakeStashCheckoutConfig(
+		bool bForcePortraitOnCheckout,
+		float CardHeightRatioPortrait,
+		float CardWidthRatioLandscape,
+		float CardHeightRatioLandscape,
+		float TabletWidthRatioPortrait = 0.6f,
+		float TabletHeightRatioPortrait = 0.8f,
+		float TabletWidthRatioLandscape = 0.8f,
+		float TabletHeightRatioLandscape = 0.65f
+	);
+
+	/**
 	 * Opens the Stash Pay checkout dialog with default sizing.
 	 * Works on both iOS and Android platforms.
 	 * 
@@ -127,7 +165,7 @@ public:
 	 * Works on both iOS and Android platforms.
 	 * 
 	 * @param CheckoutURL The URL to load in the checkout dialog
-	 * @param Config Configuration for card/tablet sizing
+	 * @param Config Configuration for card/tablet sizing (use Make Stash Checkout Config to build with all options)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Stash")
 	static void OpenCheckoutWithConfig(const FString& CheckoutURL, const FStashCheckoutConfig& Config);

@@ -319,8 +319,24 @@ public class StashHelper {
     }
     
     // ========================================================================
-    // Checkout Sizing Configuration (SDK 1.2.0+)
+    // Checkout Configuration (SDK 1.2.4+)
     // ========================================================================
+    
+    /**
+     * Sets whether phone checkout is portrait-only or allows current orientation (with landscape sizing).
+     *
+     * @param force true = portrait-locked activity; false = overlay in current orientation (default)
+     */
+    @Keep
+    public static void SetForcePortraitOnCheckout(boolean force) {
+        Log.d(TAG, "Setting force portrait on checkout: " + force);
+        try {
+            StashPayCard stashPay = StashPayCard.getInstance();
+            stashPay.setForcePortraitOnCheckout(force);
+        } catch (Exception e) {
+            Log.e(TAG, "Error setting force portrait on checkout: " + e.getMessage());
+        }
+    }
     
     /**
      * Sets the phone card height ratio for portrait orientation.
@@ -335,6 +351,38 @@ public class StashHelper {
             stashPay.setCardHeightRatioPortrait(ratio);
         } catch (Exception e) {
             Log.e(TAG, "Error setting card height ratio: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Sets the phone card width ratio for landscape orientation (when force portrait is off).
+     *
+     * @param ratio Width ratio (0.1-1.0)
+     */
+    @Keep
+    public static void SetCardWidthRatioLandscape(float ratio) {
+        Log.d(TAG, "Setting card width ratio landscape: " + ratio);
+        try {
+            StashPayCard stashPay = StashPayCard.getInstance();
+            stashPay.setCardWidthRatioLandscape(ratio);
+        } catch (Exception e) {
+            Log.e(TAG, "Error setting card width ratio landscape: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Sets the phone card height ratio for landscape orientation (when force portrait is off).
+     *
+     * @param ratio Height ratio (0.1-1.0)
+     */
+    @Keep
+    public static void SetCardHeightRatioLandscape(float ratio) {
+        Log.d(TAG, "Setting card height ratio landscape: " + ratio);
+        try {
+            StashPayCard stashPay = StashPayCard.getInstance();
+            stashPay.setCardHeightRatioLandscape(ratio);
+        } catch (Exception e) {
+            Log.e(TAG, "Error setting card height ratio landscape: " + e.getMessage());
         }
     }
     

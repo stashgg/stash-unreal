@@ -267,8 +267,20 @@ tabletHeightRatioLandscape:(float)tabletHeightLandscape {
 
 #pragma mark - Checkout Sizing
 
+- (void)setForcePortraitOnCheckout:(BOOL)force {
+    [StashPayCard sharedInstance].forcePortraitOnCheckout = force;
+}
+
 - (void)setCardHeightRatioPortrait:(float)ratio {
     [StashPayCard sharedInstance].cardHeightRatioPortrait = ratio;
+}
+
+- (void)setCardWidthRatioLandscape:(float)ratio {
+    [StashPayCard sharedInstance].cardWidthRatioLandscape = ratio;
+}
+
+- (void)setCardHeightRatioLandscape:(float)ratio {
+    [StashPayCard sharedInstance].cardHeightRatioLandscape = ratio;
 }
 
 - (void)setTabletWidthRatioPortrait:(float)ratio {

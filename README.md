@@ -137,11 +137,14 @@ void AYourPlayerController::OpenStashCheckout(const FString& CheckoutURL)
 void AYourPlayerController::OpenCustomCheckout(const FString& CheckoutURL)
 {
     FStashCheckoutConfig Config;
-    Config.CardHeightRatioPortrait = 0.7f;       // Phone card height
-    Config.TabletWidthRatioPortrait = 0.5f;      // Tablet width in portrait
-    Config.TabletHeightRatioPortrait = 0.7f;     // Tablet height in portrait
+    Config.bForcePortraitOnCheckout = false;    // Allow current orientation; use true for portrait-only checkout on phone
+    Config.CardHeightRatioPortrait = 0.7f;      // Phone card height in portrait
+    Config.CardWidthRatioLandscape = 0.9f;      // Phone card width in landscape (when force portrait off)
+    Config.CardHeightRatioLandscape = 0.6f;     // Phone card height in landscape (when force portrait off)
+    Config.TabletWidthRatioPortrait = 0.5f;     // Tablet width in portrait
+    Config.TabletHeightRatioPortrait = 0.7f;    // Tablet height in portrait
     Config.TabletWidthRatioLandscape = 0.8f;     // Tablet width in landscape
-    Config.TabletHeightRatioLandscape = 0.65f;   // Tablet height in landscape
+    Config.TabletHeightRatioLandscape = 0.65f;  // Tablet height in landscape
     
     UStashBlueprint::OpenCheckoutWithConfig(CheckoutURL, Config);
 }
@@ -328,7 +331,10 @@ Then implement `OnPaymentSucceeded` and `OnPaymentFailed` as events in your Blue
 
 | Property | Default | Description |
 |----------|---------|-------------|
+| `bForcePortraitOnCheckout` | false | When true, phone checkout is portrait-only; when false, current orientation with landscape sizing (SDK 1.2.4+) |
 | `CardHeightRatioPortrait` | 0.68 | Phone card height in portrait |
+| `CardWidthRatioLandscape` | 0.9 | Phone card width in landscape (when force portrait off) |
+| `CardHeightRatioLandscape` | 0.6 | Phone card height in landscape (when force portrait off) |
 | `TabletWidthRatioPortrait` | 0.6 | Tablet width in portrait |
 | `TabletHeightRatioPortrait` | 0.8 | Tablet height in portrait |
 | `TabletWidthRatioLandscape` | 0.8 | Tablet width in landscape |
