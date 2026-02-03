@@ -1,4 +1,4 @@
-# Stash SDK for Unreal Engine 4 (Legacy Support)
+# Stash SDK for Unreal Engine 4
 
 > **For Unreal Engine 5:**  
 > This is a sample for Unreal Engine 4.27+. For new projects, we recommend using Unreal Engine 5 with our actively maintained SDK. See the [main branch](https://github.com/stashgg/stash-unreal) for UE5 support.
