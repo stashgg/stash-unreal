@@ -1,0 +1,27 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.7",
+	"Category": "",
+	"Description": "Stash Pay Checkout Demo - A simple Unreal Engine project demonstrating Stash Pay native checkout integration on iOS and Android.",
+	"Modules": [
+		{
+			"Name": "StashUnreal5",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "Stash",
+			"Enabled": true
+		},
+		{
+			"Name": "OculusVR",
+			"Enabled": false
+		},
+		{
+			"Name": "GoogleVRController",
+			"Enabled": false
+		}
+	]
+}

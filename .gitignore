@@ -92,3 +92,24 @@ Temporary Items
 *.orig
 *.bak
 *.backup
+
+# Crash reports
+CrashReportClient/
+CrashReports/
+
+# Android build outputs
+*.apk
+*.aab
+
+# iOS build outputs
+*.ipa
+*.dSYM.zip
+
+# JetBrains Rider
+.idea/
+
+# Visual Studio Code
+.vscode/
+
+# Visual Studio settings
+*.sln.DotSettings.user
