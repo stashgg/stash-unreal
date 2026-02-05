@@ -1,4 +1,10 @@
-# Stash SDK for Unreal Engine
+# Stash for Unreal Engine
+
+
+<p align="left">
+  <img src="https://github.com/stashgg/stash-native/raw/main/.github/assets/stash_unreal.png" width="128" height="128" alt="Stash Unreal Logo"/>
+</p>
+
 
 > **Unreal Engine 4 Warning:**  
 > We actively maintain Unreal 5 support, we have a sample usage for legacy Unreal Engine 4 (4.27-plus). For Unreal Engine 4 sample please use the [`4.27-plus` branch](https://github.com/stashgg/stash-unreal/tree/4.27-plus) of this repository as the wrapper implementation differs.
