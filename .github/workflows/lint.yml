@@ -1,0 +1,45 @@
+# C++ lint with clang-tidy (Stash Unreal plugin)
+# For full semantic analysis, generate compile_commands with UnrealBuildTool and run clang-tidy locally with -p <build>.
+name: Lint
+
+on:
+  push:
+    branches: [main, 4.27-plus]
+  pull_request:
+    branches: [main, 4.27-plus]
+
+jobs:
+  lint-cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-tidy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy
+
+      - name: List plugin C++ sources
+        id: sources
+        run: |
+          find Plugins/Stash/Source -name '*.cpp' -o -name '*.h' | grep -v ObjC | sort > sources.txt
+          echo "count=$(wc -l < sources.txt)" >> $GITHUB_OUTPUT
+          cat sources.txt
+
+      - name: Run clang-tidy (plugin sources, minimal flags)
+        run: |
+          # Run clang-tidy with plugin include paths; Engine headers are not available in CI,
+          # so some files may show include errors. Checks that do not require full parsing may still run.
+          EXIT=0
+          while IFS= read -r f; do
+            clang-tidy "$f" --config-file=.clang-tidy -- \
+              -std=c++17 -xc++ \
+              -IPlugins/Stash/Source/Stash/Public \
+              -IPlugins/Stash/Source/Stash/Private \
+              -IPlugins/Stash/Source/Stash/Private/Android/Utils \
+              -IPlugins/Stash/Source/Stash/Private/IOS/Utils \
+              -DUE_BUILD_DEVELOPMENT=1 -DENGINE_MINOR_VERSION=27 \
+              -ferror-limit=0 2>&1 || EXIT=$?
+          done < sources.txt
+          # Do not fail the job on clang-tidy/parse errors when Engine is missing
+          exit 0

@@ -9,7 +9,7 @@
 /**
  * Stash Plugin Settings
  * 
- * Configuration options for the Stash Pay checkout integration.
+ * Configuration options for the Stash Native integration (card, modal, browser).
  * Access via: Project Settings -> Plugins -> Stash
  */
 UCLASS(config = Engine, defaultconfig)

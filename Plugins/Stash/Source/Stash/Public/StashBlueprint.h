@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Pay Unreal Engine SDK - Blueprint Function Library
+// Stash Unreal Engine SDK - Blueprint Function Library
 
 #pragma once
 
@@ -7,7 +7,9 @@
 
 #include "StashBlueprint.generated.h"
 
-// Stash Pay Payment Callbacks
+class UStashSubsystem;
+
+// Stash payment and lifecycle callbacks
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashPaymentSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashPaymentFailure);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashDialogDismissed);
@@ -16,30 +18,29 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStashPageLoaded, float, LoadTimeM
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashNetworkError);
 
 /**
- * Configuration for Stash Pay checkout presentation.
- * 
- * Checkout uses card presentation on phones (full width, configurable height in portrait;
- * when force portrait is off, phone landscape uses configurable width/height ratios)
- * and centered cards on tablets (configurable width and height).
+ * Configuration for Stash Native card presentation (openCard).
+ *
+ * Card slides up from bottom on phones; centered on tablets.
+ * When force portrait is off, phone landscape uses configurable width/height ratios.
  */
 USTRUCT(BlueprintType)
-struct FStashCheckoutConfig
+struct FStashCardConfig
 {
 	GENERATED_BODY()
 
-	/** When true, phone checkout is portrait-only; when false, checkout appears in current orientation with landscape sizing. Default false. */
+	/** When true, phone card is portrait-only; when false, card appears in current orientation with landscape sizing. Default false. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash")
-	bool bForcePortraitOnCheckout = false;
+	bool bForcePortrait = false;
 
 	/** Phone card height ratio for portrait (0.1-1.0). Default 0.68. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float CardHeightRatioPortrait = 0.68f;
 
-	/** Phone card width ratio for landscape (0.1-1.0). Used when Force Portrait On Checkout is false. Default 0.9. */
+	/** Phone card width ratio for landscape (0.1-1.0). Used when bForcePortrait is false. Default 0.9. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float CardWidthRatioLandscape = 0.9f;
 
-	/** Phone card height ratio for landscape (0.1-1.0). Used when Force Portrait On Checkout is false. Default 0.6. */
+	/** Phone card height ratio for landscape (0.1-1.0). Used when bForcePortrait is false. Default 0.6. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float CardHeightRatioLandscape = 0.6f;
 
@@ -61,10 +62,9 @@ struct FStashCheckoutConfig
 };
 
 /**
- * Configuration for Stash Pay modal presentation.
- * 
- * Modal always appears centered on screen (unlike checkout which uses cards on phones).
- * Supports independent sizing for phone/tablet and portrait/landscape orientations.
+ * Configuration for Stash Native modal presentation (openModal).
+ *
+ * Modal always appears centered on screen. Supports independent sizing for phone/tablet and portrait/landscape.
  */
 USTRUCT(BlueprintType)
 struct FStashModalConfig
@@ -72,50 +72,50 @@ struct FStashModalConfig
 	GENERATED_BODY()
 
 	/** Whether to show drag bar at top of modal. Default true. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash")
 	bool bShowDragBar = true;
 
 	/** Whether tap outside and drag gestures can dismiss the modal. Default true. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash")
 	bool bAllowDismiss = true;
 
 	/** Phone width ratio for portrait (0.1-1.0). Default 0.9. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float PhoneWidthRatioPortrait = 0.9f;
 
 	/** Phone height ratio for portrait (0.1-1.0). Default 0.7. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float PhoneHeightRatioPortrait = 0.7f;
 
 	/** Phone width ratio for landscape (0.1-1.0). Default 0.7. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float PhoneWidthRatioLandscape = 0.7f;
 
 	/** Phone height ratio for landscape (0.1-1.0). Default 0.85. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float PhoneHeightRatioLandscape = 0.85f;
 
 	/** Tablet width ratio for portrait (0.1-1.0). Default 0.6. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float TabletWidthRatioPortrait = 0.6f;
 
 	/** Tablet height ratio for portrait (0.1-1.0). Default 0.7. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float TabletHeightRatioPortrait = 0.7f;
 
 	/** Tablet width ratio for landscape (0.1-1.0). Default 0.5. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float TabletWidthRatioLandscape = 0.5f;
 
 	/** Tablet height ratio for landscape (0.1-1.0). Default 0.8. */
-	UPROPERTY(BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float TabletHeightRatioLandscape = 0.8f;
 };
 
 /**
- * Stash Pay Blueprint Function Library
- * 
- * Provides cross-platform functions for integrating Stash Pay checkout
+ * Stash Blueprint Function Library
+ *
+ * Provides cross-platform functions for integrating Stash Native (card, modal, browser)
  * into Unreal Engine projects on iOS and Android.
  */
 UCLASS()
@@ -127,9 +127,9 @@ public:
 	UStashBlueprint(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer) {};
 
 	/**
-	 * Builds a checkout config with all options. Use this in Blueprint to get a config with force portrait and phone landscape sizing.
-	 * 
-	 * @param bForcePortraitOnCheckout When true, phone checkout is portrait-only; when false, uses current orientation and landscape ratios.
+	 * Builds a card config with all options. Use in Blueprint with Open Card With Config.
+	 *
+	 * @param bForcePortrait When true, phone card is portrait-only; when false, uses current orientation and landscape ratios.
 	 * @param CardHeightRatioPortrait Phone card height in portrait (0.1-1.0).
 	 * @param CardWidthRatioLandscape Phone card width in landscape when force portrait off (0.1-1.0).
 	 * @param CardHeightRatioLandscape Phone card height in landscape when force portrait off (0.1-1.0).
@@ -138,10 +138,9 @@ public:
 	 * @param TabletWidthRatioLandscape Tablet width in landscape (0.1-1.0).
 	 * @param TabletHeightRatioLandscape Tablet height in landscape (0.1-1.0).
 	 */
-	/** Use this node in Blueprint to build checkout config with Force Portrait and phone landscape sizing. All pins show by default. */
-	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Make Stash Checkout Config"))
-	static FStashCheckoutConfig MakeStashCheckoutConfig(
-		bool bForcePortraitOnCheckout,
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Make Stash Card Config"))
+	static FStashCardConfig MakeStashCardConfig(
+		bool bForcePortrait,
 		float CardHeightRatioPortrait,
 		float CardWidthRatioLandscape,
 		float CardHeightRatioLandscape,
@@ -152,87 +151,105 @@ public:
 	);
 
 	/**
-	 * Opens the Stash Pay checkout dialog with default sizing.
-	 * Works on both iOS and Android platforms.
-	 * 
-	 * @param CheckoutURL The URL to load in the checkout dialog
+	 * Opens the Stash card with default sizing (drawer on phones, centered on tablets).
+	 *
+	 * @param URL The URL to load in the card
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Stash")
-	static void OpenCheckout(const FString& CheckoutURL);
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Open Card"))
+	static void OpenCard(const FString& URL);
 
 	/**
-	 * Opens the Stash Pay checkout dialog with custom sizing configuration.
-	 * Works on both iOS and Android platforms.
-	 * 
-	 * @param CheckoutURL The URL to load in the checkout dialog
-	 * @param Config Configuration for card/tablet sizing (use Make Stash Checkout Config to build with all options)
+	 * Opens the Stash card with custom sizing configuration.
+	 *
+	 * @param URL The URL to load in the card
+	 * @param Config Configuration for card/tablet sizing (use Make Stash Card Config)
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Stash")
-	static void OpenCheckoutWithConfig(const FString& CheckoutURL, const FStashCheckoutConfig& Config);
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Open Card With Config"))
+	static void OpenCardWithConfig(const FString& URL, const FStashCardConfig& Config);
 
 	/**
-	 * Checks if the Stash Pay checkout dialog is currently open.
-	 * Works on both iOS and Android platforms.
-	 * 
-	 * @return true if the checkout dialog is displayed
+	 * Checks if the Stash card or modal is currently open.
+	 *
+	 * @return true if card or modal is displayed
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Stash")
-	static bool IsCheckoutOpen();
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Is Card Open"))
+	static bool IsCardOpen();
 
 	/**
-	 * Dismisses the Stash Pay checkout dialog.
-	 * Works on both iOS and Android platforms.
+	 * Checks if a purchase is currently being processed.
+	 * When true, the checkout UI cannot be dismissed by the user.
+	 *
+	 * @return true if a purchase is in progress
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Stash")
-	static void DismissCheckout();
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Is Purchase Processing"))
+	static bool IsPurchaseProcessing();
+
+	/**
+	 * Dismisses the currently displayed Stash card or modal.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Dismiss Card"))
+	static void DismissCard();
+
+	/**
+	 * Opens the URL in the platform browser (SFSafariViewController on iOS, Chrome Custom Tabs on Android).
+	 * No in-app UI, no config, no callbacks.
+	 *
+	 * @param URL The URL to open
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Open Browser"))
+	static void OpenBrowser(const FString& URL);
+
+	/**
+	 * Dismisses the in-app browser view. iOS only; no-op on Android (Chrome Custom Tabs cannot be closed by the app).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Close Browser"))
+	static void CloseBrowser();
 
 	// ========================================================================
-	// Modal Presentation (SDK 1.2.0+)
+	// Modal Presentation (Stash Native 2.0)
 	// ========================================================================
 
 	/**
 	 * Opens a URL in a centered modal dialog with default configuration.
-	 * Unlike OpenCheckout which uses different presentations on phones vs tablets,
-	 * OpenModal always shows a centered modal on all devices.
-	 * 
+	 * Unlike OpenCard which uses drawer/centered card, OpenModal always shows a centered modal on all devices.
+	 *
 	 * @param URL The URL to load in the modal
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Stash")
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Open Modal"))
 	static void OpenModal(const FString& URL);
 
 	/**
 	 * Opens a URL in a centered modal dialog with custom configuration.
-	 * Unlike OpenCheckout which uses different presentations on phones vs tablets,
-	 * OpenModal always shows a centered modal on all devices.
-	 * 
+	 *
 	 * @param URL The URL to load in the modal
 	 * @param Config Configuration for sizing, drag bar, and dismiss behavior
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Stash")
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Open Modal With Config"))
 	static void OpenModalWithConfig(const FString& URL, const FStashModalConfig& Config);
 
 	// ========================================================================
-	// Configuration (SDK 1.2.0+)
+	// Configuration
 	// ========================================================================
 
 	/**
-	 * Sets whether to use web-based checkout (Safari/Chrome) instead of in-app UI.
-	 * When enabled, checkout URLs open in SFSafariViewController (iOS) or Chrome Custom Tabs (Android).
-	 * 
-	 * @param bForce true to use web-based checkout, false for in-app UI
+	 * (iOS) When enabled, the app stays in landscape when card/modal is not open; portrait is allowed only while Stash UI is displayed. Call at game startup for landscape-only games. No effect on Android.
+	 *
+	 * @param bEnable true to lock to landscape when card closed, false to use default orientations
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Stash")
-	static void SetForceWebBasedCheckout(bool bForce);
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Set Landscape Lock When Card Closed"))
+	static void SetLandscapeLockWhenCardClosed(bool bEnable);
 
 	/**
-	 * (iOS) When enabled, the app stays in landscape when checkout is not open; portrait is allowed only while Stash Pay checkout is displayed (required for phone checkout). Call at game startup for landscape-only games. No effect on Android.
-	 * @param bEnable true to lock to landscape when checkout closed, false to use default orientations
+	 * Returns the Stash Subsystem so you can bind to On Payment Success, On Dialog Dismissed, etc. in Blueprint.
+	 * In Blueprint: call "Get Stash Subsystem", then use "Assign [event]" or "Add [event]" on the returned object.
+	 * World context can be a World, Actor, Player Controller, or Game Instance; pass Self from Level Blueprint or an Actor in a running game.
+	 * @return The subsystem, or null if no valid world is available (e.g. in editor before Play-in-Editor, or invalid context).
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Stash")
-	static void SetLandscapeLockWhenCheckoutClosed(bool bEnable);
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Get Stash Subsystem", WorldContext = "WorldContextObject"))
+	static UStashSubsystem* GetStashSubsystem(UObject* WorldContextObject);
 
 	// ========================================================================
-	// Delegates - Bind to these to receive payment callbacks
+	// Delegates - Bind to these to receive payment callbacks (C++). For Blueprint, use Get Stash Subsystem then bind to its events.
 	// ========================================================================
 	
 	/** Called when a payment completes successfully */
@@ -241,13 +258,13 @@ public:
 	/** Called when a payment fails */
 	static FOnStashPaymentFailure OnPaymentFailure;
 	
-	/** Called when the checkout dialog is dismissed by the user */
+	/** Called when the card or modal is dismissed by the user */
 	static FOnStashDialogDismissed OnDialogDismissed;
 	
 	/** Called when an opt-in response is received (modal payment channel selection) */
 	static FOnStashOptInResponse OnOptInResponse;
 	
-	/** Called when the checkout page finishes loading */
+	/** Called when the card/modal page finishes loading */
 	static FOnStashPageLoaded OnPageLoaded;
 
 	/** Called when a network error occurs during initial page load */

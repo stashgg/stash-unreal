@@ -12,16 +12,16 @@ https://github.com/EpicGames/UnrealEngine/blob/release/Engine/Source/Programs/Un
     <!-- =============================================================================================== -->
     <init>
         <log text="Stash iOS -> Adding permission to plist"/>
-        <log text="Stash iOS -> Including Stash Pay SDK"/>
+        <log text="Stash iOS -> Including Stash Native SDK"/>
         <trace enable="true"/>
 
         <dumpvars/>
     </init>
 
-    <!-- Copy pre-built StashPay XCFramework -->
+    <!-- Copy pre-built StashNative XCFramework -->
     <copyFiles>
-        <copyDir src="$S(PluginDir)/ThirdParty/iOS/StashPay.xcframework" 
-                 dst="$S(BuildDir)/Frameworks/StashPay.xcframework" />
+        <copyDir src="$S(PluginDir)/ThirdParty/iOS/StashNative.xcframework"
+                 dst="$S(BuildDir)/Frameworks/StashNative.xcframework" />
     </copyFiles>
 
 </root>

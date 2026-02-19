@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Pay Unreal Engine SDK - Android JNI Utilities
+// Stash Unreal Engine SDK - Android JNI Utilities
 //
 // This file provides a template-based system for calling Java methods from C++.
 // It handles automatic type conversion, signature generation, and JNI lifecycle management.
@@ -53,7 +53,7 @@ public:
   }
 
   /** Check if the Android platform is properly initialized for JNI calls */
-  static int isSupportPlatform()
+  static bool isSupportPlatform()
   {
     if(!m_supportedPlatform)
     {
@@ -145,7 +145,7 @@ public:
   }
 
 
-  ///=============== Override Tempalte===========================
+  ///=============== Override Template ===========================
   static std::string GetTypeName(void)
   {
     return "V";

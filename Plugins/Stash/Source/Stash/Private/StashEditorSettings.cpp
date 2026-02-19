@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Pay Unreal Engine SDK - Editor Settings Implementation
+// Stash Unreal Engine SDK - Editor Settings Implementation
 
 #include "StashEditorSettings.h"
 
@@ -14,7 +14,7 @@ void UStashEditorSettings::RegisterEditorSettings(ISettingsModule* SettingsModul
 {
 	SettingsModule->RegisterSettings("Project", "Plugins", "Stash",
 		LOCTEXT("SettingsName", "Stash"),
-		LOCTEXT("SettingsDescription", "Configure Stash Pay checkout integration"),
+		LOCTEXT("SettingsDescription", "Configure Stash Native (card, modal, browser) integration"),
 		GetMutableDefault<UStashEditorSettings>());
 }
 

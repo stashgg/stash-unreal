@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Unreal Engine SDK - Android JNI Bridge
+// Stash Unreal Engine SDK - Android JNI Bridge (Stash Native 2.0.0)
 
 package com.Plugins.Stash;
 
@@ -7,20 +7,20 @@ import android.app.Activity;
 import android.util.Log;
 import androidx.annotation.Keep;
 
-import com.stash.popup.StashPayCard;
+import com.stash.stashnative.StashNativeCard;
 
 /**
- * StashHelper - Java wrapper for Stash Android SDK
- * 
- * This class bridges the Stash native Android SDK with Unreal Engine.
- * It provides static methods callable from C++ via JNI.
+ * StashHelper - Java wrapper for Stash Native Android SDK.
+ *
+ * Bridges the Stash Native Android SDK with Unreal Engine.
+ * Provides static methods callable from C++ via JNI.
  */
 @Keep
 public class StashHelper {
     private static final String TAG = "StashHelper";
     private static volatile boolean isInitialized = false;
     private static final Object initLock = new Object();
-    
+
     /**
      * Native C++ callback methods (implemented in StashBlueprint.cpp)
      */
@@ -30,11 +30,11 @@ public class StashHelper {
     public static native void nativeOnOptInResponse(String optinType);
     public static native void nativeOnPageLoaded(long loadTimeMs);
     public static native void nativeOnNetworkError();
-    
+
     /**
-     * Initializes the Stash SDK with the given activity.
-     * Must be called before opening checkout.
-     * 
+     * Initializes the Stash Native SDK with the given activity.
+     * Must be called before opening card, modal, or browser.
+     *
      * @param activity The current Android activity
      */
     @Keep
@@ -43,179 +43,225 @@ public class StashHelper {
             Log.e(TAG, "Cannot initialize with null activity");
             return;
         }
-        
-        // Prevent redundant initialization using double-checked locking
+
         if (isInitialized) {
             Log.d(TAG, "StashHelper already initialized");
             return;
         }
-        
+
         synchronized (initLock) {
             if (isInitialized) {
                 return;
             }
-            
-            Log.d(TAG, "Initializing StashHelper");
-            
-            StashPayCard stashPay = StashPayCard.getInstance();
-            stashPay.setActivity(activity);
-            
-            // Set up the listener to receive payment callbacks
-            stashPay.setListener(new StashPayCard.StashPayListenerAdapter() {
-            @Override
-            public void onPaymentSuccess() {
-                Log.d(TAG, "Payment completed successfully");
-                try {
-                    nativeOnPaymentSuccess();
-                } catch (Exception e) {
-                    Log.e(TAG, "Error calling native onPaymentSuccess: " + e.getMessage());
+
+            Log.d(TAG, "Initializing StashHelper (Stash Native 2.0)");
+
+            StashNativeCard card = StashNativeCard.getInstance();
+            card.setActivity(activity);
+            card.setListener(new StashNativeCard.StashNativeCardListenerAdapter() {
+                @Override
+                public void onPaymentSuccess() {
+                    Log.d(TAG, "Payment completed successfully");
+                    try {
+                        nativeOnPaymentSuccess();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error calling native onPaymentSuccess: " + e.getMessage());
+                    }
                 }
-            }
-            
-            @Override
-            public void onPaymentFailure() {
-                Log.d(TAG, "Payment failed");
-                try {
-                    nativeOnPaymentFailure();
-                } catch (Exception e) {
-                    Log.e(TAG, "Error calling native onPaymentFailure: " + e.getMessage());
+
+                @Override
+                public void onPaymentFailure() {
+                    Log.d(TAG, "Payment failed");
+                    try {
+                        nativeOnPaymentFailure();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error calling native onPaymentFailure: " + e.getMessage());
+                    }
                 }
-            }
-            
-            @Override
-            public void onDialogDismissed() {
-                Log.d(TAG, "Checkout dialog dismissed");
-                try {
-                    nativeOnDialogDismissed();
-                } catch (Exception e) {
-                    Log.e(TAG, "Error calling native onDialogDismissed: " + e.getMessage());
+
+                @Override
+                public void onDialogDismissed() {
+                    Log.d(TAG, "Card/modal dismissed");
+                    try {
+                        nativeOnDialogDismissed();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error calling native onDialogDismissed: " + e.getMessage());
+                    }
                 }
-            }
-            
-            @Override
-            public void onOptInResponse(String optinType) {
-                Log.d(TAG, "Opt-in received: " + optinType);
-                try {
-                    nativeOnOptInResponse(optinType != null ? optinType : "");
-                } catch (Exception e) {
-                    Log.e(TAG, "Error calling native onOptInResponse: " + e.getMessage());
+
+                @Override
+                public void onOptInResponse(String optinType) {
+                    Log.d(TAG, "Opt-in received: " + optinType);
+                    try {
+                        nativeOnOptInResponse(optinType != null ? optinType : "");
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error calling native onOptInResponse: " + e.getMessage());
+                    }
                 }
-            }
-            
-            @Override
-            public void onPageLoaded(long loadTimeMs) {
-                Log.d(TAG, "Page loaded in " + loadTimeMs + " ms");
-                try {
-                    nativeOnPageLoaded(loadTimeMs);
-                } catch (Exception e) {
-                    Log.e(TAG, "Error calling native onPageLoaded: " + e.getMessage());
+
+                @Override
+                public void onPageLoaded(long loadTimeMs) {
+                    Log.d(TAG, "Page loaded in " + loadTimeMs + " ms");
+                    try {
+                        nativeOnPageLoaded(loadTimeMs);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error calling native onPageLoaded: " + e.getMessage());
+                    }
                 }
-            }
-            
-            @Override
-            public void onNetworkError() {
-                Log.d(TAG, "Network error occurred");
-                try {
-                    nativeOnNetworkError();
-                } catch (Exception e) {
-                    Log.e(TAG, "Error calling native onNetworkError: " + e.getMessage());
+
+                @Override
+                public void onNetworkError() {
+                    Log.d(TAG, "Network error occurred");
+                    try {
+                        nativeOnNetworkError();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error calling native onNetworkError: " + e.getMessage());
+                    }
                 }
-            }
             });
-            
+
             isInitialized = true;
             Log.d(TAG, "StashHelper initialized successfully");
         }
     }
-    
+
     /**
-     * Opens the Stash checkout dialog with the specified URL.
-     * 
+     * Opens the Stash card with the specified URL (default config).
+     *
      * @param activity The current Android activity
-     * @param url The checkout URL to load
+     * @param url The URL to load in the card
      */
     @Keep
-    public static void OpenCheckout(Activity activity, String url) {
+    public static void OpenCard(Activity activity, String url) {
         if (activity == null) {
-            Log.e(TAG, "Error: Cannot open checkout with null activity");
+            Log.e(TAG, "Error: Cannot open card with null activity");
             return;
         }
-        
         if (url == null || url.isEmpty()) {
-            Log.e(TAG, "Error: Empty checkout URL provided");
+            Log.e(TAG, "Error: Empty card URL provided");
             return;
         }
-        
-        // Auto-initialize if needed
         if (!isInitialized) {
             Initialize(activity);
         }
-        
-        Log.d(TAG, "Opening checkout with URL: " + url);
-        
-        activity.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    StashPayCard stashPay = StashPayCard.getInstance();
-                    stashPay.openCheckout(url);
-                } catch (Exception e) {
-                    Log.e(TAG, "Error opening checkout: " + e.getMessage());
-                }
+        Log.d(TAG, "Opening card with URL: " + url);
+        activity.runOnUiThread(() -> {
+            try {
+                StashNativeCard.getInstance().openCard(url, null);
+            } catch (Exception e) {
+                Log.e(TAG, "Error opening card: " + e.getMessage());
             }
         });
     }
-    
+
     /**
-     * Checks if the checkout dialog is currently open.
-     * 
-     * @return true if the checkout is currently displayed
+     * Opens the Stash card with the specified URL and config.
+     *
+     * @param activity The current Android activity
+     * @param url The URL to load in the card
+     * @param forcePortrait Whether to force portrait for phone card
+     * @param cardHeightRatioPortrait Phone card height ratio portrait (0.1-1.0)
+     * @param cardWidthRatioLandscape Phone card width ratio landscape (0.1-1.0)
+     * @param cardHeightRatioLandscape Phone card height ratio landscape (0.1-1.0)
+     * @param tabletWidthRatioPortrait Tablet width ratio portrait (0.1-1.0)
+     * @param tabletHeightRatioPortrait Tablet height ratio portrait (0.1-1.0)
+     * @param tabletWidthRatioLandscape Tablet width ratio landscape (0.1-1.0)
+     * @param tabletHeightRatioLandscape Tablet height ratio landscape (0.1-1.0)
      */
     @Keep
-    public static boolean IsCheckoutOpen() {
+    public static void OpenCardWithConfig(Activity activity, String url,
+            boolean forcePortrait,
+            float cardHeightRatioPortrait, float cardWidthRatioLandscape, float cardHeightRatioLandscape,
+            float tabletWidthRatioPortrait, float tabletHeightRatioPortrait,
+            float tabletWidthRatioLandscape, float tabletHeightRatioLandscape) {
+        if (activity == null) {
+            Log.e(TAG, "Error: Cannot open card with null activity");
+            return;
+        }
+        if (url == null || url.isEmpty()) {
+            Log.e(TAG, "Error: Empty card URL provided");
+            return;
+        }
+        if (!isInitialized) {
+            Initialize(activity);
+        }
+        Log.d(TAG, "Opening card with config: " + url);
+        activity.runOnUiThread(() -> {
+            try {
+                StashNativeCard.CardConfig config = new StashNativeCard.CardConfig();
+                config.forcePortrait = forcePortrait;
+                config.cardHeightRatioPortrait = cardHeightRatioPortrait;
+                config.cardWidthRatioLandscape = cardWidthRatioLandscape;
+                config.cardHeightRatioLandscape = cardHeightRatioLandscape;
+                config.tabletWidthRatioPortrait = tabletWidthRatioPortrait;
+                config.tabletHeightRatioPortrait = tabletHeightRatioPortrait;
+                config.tabletWidthRatioLandscape = tabletWidthRatioLandscape;
+                config.tabletHeightRatioLandscape = tabletHeightRatioLandscape;
+                StashNativeCard.getInstance().openCard(url, config);
+            } catch (Exception e) {
+                Log.e(TAG, "Error opening card with config: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Checks if the card or modal is currently open.
+     *
+     * @return true if card/modal is currently displayed
+     */
+    @Keep
+    public static boolean IsCardOpen() {
         try {
-            StashPayCard stashPay = StashPayCard.getInstance();
-            return stashPay.isCurrentlyPresented();
+            return StashNativeCard.getInstance().isCurrentlyPresented();
         } catch (Exception e) {
-            Log.e(TAG, "Error checking checkout state: " + e.getMessage());
+            Log.e(TAG, "Error checking card state: " + e.getMessage());
             return false;
         }
     }
-    
+
     /**
-     * Dismisses the currently displayed checkout dialog.
-     * 
+     * Checks if a purchase is currently being processed.
+     *
+     * @return true if a purchase is in progress
+     */
+    @Keep
+    public static boolean IsPurchaseProcessing() {
+        try {
+            return StashNativeCard.getInstance().isPurchaseProcessing();
+        } catch (Exception e) {
+            Log.e(TAG, "Error checking purchase state: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Dismisses the currently displayed card or modal.
+     *
      * @param activity The current Android activity
      */
     @Keep
-    public static void DismissCheckout(Activity activity) {
-        Log.d(TAG, "Dismissing checkout");
-        
+    public static void DismissCard(Activity activity) {
+        Log.d(TAG, "Dismissing card");
         if (activity == null) {
             Log.e(TAG, "Cannot dismiss with null activity");
             return;
         }
-        
-        activity.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    StashPayCard stashPay = StashPayCard.getInstance();
-                    stashPay.dismiss();
-                } catch (Exception e) {
-                    Log.e(TAG, "Error dismissing checkout: " + e.getMessage());
-                }
+        activity.runOnUiThread(() -> {
+            try {
+                StashNativeCard.getInstance().dismiss();
+            } catch (Exception e) {
+                Log.e(TAG, "Error dismissing card: " + e.getMessage());
             }
         });
     }
-    
+
     // ========================================================================
-    // Modal Presentation (SDK 1.2.0+)
+    // Modal (Stash Native 2.0)
     // ========================================================================
-    
+
     /**
-     * Opens a URL in a centered modal dialog with default configuration.
-     * 
+     * Opens a URL in a centered modal with default configuration.
+     *
      * @param activity The current Android activity
      * @param url The URL to load in the modal
      */
@@ -225,47 +271,25 @@ public class StashHelper {
             Log.e(TAG, "Error: Cannot open modal with null activity");
             return;
         }
-        
         if (url == null || url.isEmpty()) {
             Log.e(TAG, "Error: Empty modal URL provided");
             return;
         }
-        
-        // Auto-initialize if needed
         if (!isInitialized) {
             Initialize(activity);
         }
-        
         Log.d(TAG, "Opening modal with URL: " + url);
-        
-        activity.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    StashPayCard stashPay = StashPayCard.getInstance();
-                    stashPay.openModal(url);
-                } catch (Exception e) {
-                    Log.e(TAG, "Error opening modal: " + e.getMessage());
-                }
+        activity.runOnUiThread(() -> {
+            try {
+                StashNativeCard.getInstance().openModal(url, null);
+            } catch (Exception e) {
+                Log.e(TAG, "Error opening modal: " + e.getMessage());
             }
         });
     }
-    
+
     /**
-     * Opens a URL in a centered modal dialog with custom configuration.
-     * 
-     * @param activity The current Android activity
-     * @param url The URL to load in the modal
-     * @param showDragBar Whether to show drag bar at top
-     * @param allowDismiss Whether tap outside can dismiss
-     * @param phoneWidthPortrait Phone width ratio in portrait
-     * @param phoneHeightPortrait Phone height ratio in portrait
-     * @param phoneWidthLandscape Phone width ratio in landscape
-     * @param phoneHeightLandscape Phone height ratio in landscape
-     * @param tabletWidthPortrait Tablet width ratio in portrait
-     * @param tabletHeightPortrait Tablet height ratio in portrait
-     * @param tabletWidthLandscape Tablet width ratio in landscape
-     * @param tabletHeightLandscape Tablet height ratio in landscape
+     * Opens a URL in a centered modal with custom configuration.
      */
     @Keep
     public static void OpenModalWithConfig(Activity activity, String url,
@@ -278,191 +302,74 @@ public class StashHelper {
             Log.e(TAG, "Error: Cannot open modal with null activity");
             return;
         }
-        
         if (url == null || url.isEmpty()) {
             Log.e(TAG, "Error: Empty modal URL provided");
             return;
         }
-        
-        // Auto-initialize if needed
         if (!isInitialized) {
             Initialize(activity);
         }
-        
-        Log.d(TAG, "Opening modal with URL: " + url + " (showDragBar=" + showDragBar + ", allowDismiss=" + allowDismiss + ")");
-        
-        activity.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    StashPayCard stashPay = StashPayCard.getInstance();
-                    
-                    // Create configuration object
-                    StashPayCard.ModalConfig config = new StashPayCard.ModalConfig();
-                    config.showDragBar = showDragBar;
-                    config.allowDismiss = allowDismiss;
-                    config.phoneWidthRatioPortrait = phoneWidthPortrait;
-                    config.phoneHeightRatioPortrait = phoneHeightPortrait;
-                    config.phoneWidthRatioLandscape = phoneWidthLandscape;
-                    config.phoneHeightRatioLandscape = phoneHeightLandscape;
-                    config.tabletWidthRatioPortrait = tabletWidthPortrait;
-                    config.tabletHeightRatioPortrait = tabletHeightPortrait;
-                    config.tabletWidthRatioLandscape = tabletWidthLandscape;
-                    config.tabletHeightRatioLandscape = tabletHeightLandscape;
-                    
-                    stashPay.openModal(url, config);
-                } catch (Exception e) {
-                    Log.e(TAG, "Error opening modal with config: " + e.getMessage());
-                }
+        Log.d(TAG, "Opening modal with config: " + url);
+        activity.runOnUiThread(() -> {
+            try {
+                StashNativeCard.ModalConfig config = new StashNativeCard.ModalConfig();
+                config.showDragBar = showDragBar;
+                config.allowDismiss = allowDismiss;
+                config.phoneWidthRatioPortrait = phoneWidthPortrait;
+                config.phoneHeightRatioPortrait = phoneHeightPortrait;
+                config.phoneWidthRatioLandscape = phoneWidthLandscape;
+                config.phoneHeightRatioLandscape = phoneHeightLandscape;
+                config.tabletWidthRatioPortrait = tabletWidthPortrait;
+                config.tabletHeightRatioPortrait = tabletHeightPortrait;
+                config.tabletWidthRatioLandscape = tabletWidthLandscape;
+                config.tabletHeightRatioLandscape = tabletHeightLandscape;
+                StashNativeCard.getInstance().openModal(url, config);
+            } catch (Exception e) {
+                Log.e(TAG, "Error opening modal with config: " + e.getMessage());
             }
         });
     }
-    
+
     // ========================================================================
-    // Checkout Configuration (SDK 1.2.4+)
+    // Browser (Stash Native 2.0)
     // ========================================================================
-    
+
     /**
-     * Sets whether phone checkout is portrait-only or allows current orientation (with landscape sizing).
+     * Opens the URL in Chrome Custom Tabs. No callbacks.
      *
-     * @param force true = portrait-locked activity; false = overlay in current orientation (default)
+     * @param activity The current Android activity
+     * @param url The URL to open
      */
     @Keep
-    public static void SetForcePortraitOnCheckout(boolean force) {
-        Log.d(TAG, "Setting force portrait on checkout: " + force);
-        try {
-            StashPayCard stashPay = StashPayCard.getInstance();
-            stashPay.setForcePortraitOnCheckout(force);
-        } catch (Exception e) {
-            Log.e(TAG, "Error setting force portrait on checkout: " + e.getMessage());
+    public static void OpenBrowser(Activity activity, String url) {
+        if (activity == null) {
+            Log.e(TAG, "Error: Cannot open browser with null activity");
+            return;
         }
+        if (url == null || url.isEmpty()) {
+            Log.e(TAG, "Error: Empty browser URL provided");
+            return;
+        }
+        if (!isInitialized) {
+            Initialize(activity);
+        }
+        Log.d(TAG, "Opening browser: " + url);
+        activity.runOnUiThread(() -> {
+            try {
+                StashNativeCard.getInstance().openBrowser(url);
+            } catch (Exception e) {
+                Log.e(TAG, "Error opening browser: " + e.getMessage());
+            }
+        });
     }
-    
+
     /**
-     * Sets the phone card height ratio for portrait orientation.
-     * 
-     * @param ratio Height ratio (0.1-1.0)
+     * No-op on Android (Chrome Custom Tabs cannot be closed by the app).
+     * Exists for API consistency with iOS.
      */
     @Keep
-    public static void SetCardHeightRatioPortrait(float ratio) {
-        Log.d(TAG, "Setting card height ratio portrait: " + ratio);
-        try {
-            StashPayCard stashPay = StashPayCard.getInstance();
-            stashPay.setCardHeightRatioPortrait(ratio);
-        } catch (Exception e) {
-            Log.e(TAG, "Error setting card height ratio: " + e.getMessage());
-        }
+    public static void CloseBrowser() {
+        // No-op on Android
     }
-    
-    /**
-     * Sets the phone card width ratio for landscape orientation (when force portrait is off).
-     *
-     * @param ratio Width ratio (0.1-1.0)
-     */
-    @Keep
-    public static void SetCardWidthRatioLandscape(float ratio) {
-        Log.d(TAG, "Setting card width ratio landscape: " + ratio);
-        try {
-            StashPayCard stashPay = StashPayCard.getInstance();
-            stashPay.setCardWidthRatioLandscape(ratio);
-        } catch (Exception e) {
-            Log.e(TAG, "Error setting card width ratio landscape: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * Sets the phone card height ratio for landscape orientation (when force portrait is off).
-     *
-     * @param ratio Height ratio (0.1-1.0)
-     */
-    @Keep
-    public static void SetCardHeightRatioLandscape(float ratio) {
-        Log.d(TAG, "Setting card height ratio landscape: " + ratio);
-        try {
-            StashPayCard stashPay = StashPayCard.getInstance();
-            stashPay.setCardHeightRatioLandscape(ratio);
-        } catch (Exception e) {
-            Log.e(TAG, "Error setting card height ratio landscape: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * Sets the tablet card width ratio for portrait orientation.
-     * 
-     * @param ratio Width ratio (0.1-1.0)
-     */
-    @Keep
-    public static void SetTabletWidthRatioPortrait(float ratio) {
-        Log.d(TAG, "Setting tablet width ratio portrait: " + ratio);
-        try {
-            StashPayCard stashPay = StashPayCard.getInstance();
-            stashPay.setTabletWidthRatioPortrait(ratio);
-        } catch (Exception e) {
-            Log.e(TAG, "Error setting tablet width ratio portrait: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * Sets the tablet card height ratio for portrait orientation.
-     * 
-     * @param ratio Height ratio (0.1-1.0)
-     */
-    @Keep
-    public static void SetTabletHeightRatioPortrait(float ratio) {
-        Log.d(TAG, "Setting tablet height ratio portrait: " + ratio);
-        try {
-            StashPayCard stashPay = StashPayCard.getInstance();
-            stashPay.setTabletHeightRatioPortrait(ratio);
-        } catch (Exception e) {
-            Log.e(TAG, "Error setting tablet height ratio portrait: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * Sets the tablet card width ratio for landscape orientation.
-     * 
-     * @param ratio Width ratio (0.1-1.0)
-     */
-    @Keep
-    public static void SetTabletWidthRatioLandscape(float ratio) {
-        Log.d(TAG, "Setting tablet width ratio landscape: " + ratio);
-        try {
-            StashPayCard stashPay = StashPayCard.getInstance();
-            stashPay.setTabletWidthRatioLandscape(ratio);
-        } catch (Exception e) {
-            Log.e(TAG, "Error setting tablet width ratio landscape: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * Sets the tablet card height ratio for landscape orientation.
-     * 
-     * @param ratio Height ratio (0.1-1.0)
-     */
-    @Keep
-    public static void SetTabletHeightRatioLandscape(float ratio) {
-        Log.d(TAG, "Setting tablet height ratio landscape: " + ratio);
-        try {
-            StashPayCard stashPay = StashPayCard.getInstance();
-            stashPay.setTabletHeightRatioLandscape(ratio);
-        } catch (Exception e) {
-            Log.e(TAG, "Error setting tablet height ratio landscape: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * Sets whether to use web-based checkout (Chrome) instead of in-app UI.
-     * 
-     * @param force true to use Chrome Custom Tabs, false for in-app UI
-     */
-    @Keep
-    public static void SetForceWebBasedCheckout(boolean force) {
-        Log.d(TAG, "Setting force web-based checkout: " + force);
-        try {
-            StashPayCard stashPay = StashPayCard.getInstance();
-            stashPay.setForceWebBasedCheckout(force);
-        } catch (Exception e) {
-            Log.e(TAG, "Error setting force web-based checkout: " + e.getMessage());
-        }
-    }
+
 }

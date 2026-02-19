@@ -1,9 +1,15 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Pay Unreal Engine SDK - Blueprint Function Library Implementation
+// Stash Unreal Engine SDK - Blueprint Function Library Implementation
 
 #include "StashBlueprint.h"
 #include "Stash.h"
-#include <Async/Async.h>
+#include "StashSubsystem.h"
+#include "Async/Async.h"
+#include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "Engine/GameInstance.h"
+#include "GameFramework/Actor.h"
+#include "GameFramework/PlayerController.h"
 
 #if PLATFORM_ANDROID
 #include "Android/Utils/AndroidUtils.h"
@@ -11,7 +17,7 @@
 
 #if PLATFORM_IOS
 #include "IOS/Utils/ObjC_Convert.h"
-#include "IOS/ObjC/StashPayCardWrapper.h"
+#include "IOS/ObjC/StashNativeCardWrapper.h"
 #endif
 
 // Initialize static delegates
@@ -22,8 +28,8 @@ FOnStashOptInResponse UStashBlueprint::OnOptInResponse;
 FOnStashPageLoaded UStashBlueprint::OnPageLoaded;
 FOnStashNetworkError UStashBlueprint::OnNetworkError;
 
-FStashCheckoutConfig UStashBlueprint::MakeStashCheckoutConfig(
-	bool bForcePortraitOnCheckout,
+FStashCardConfig UStashBlueprint::MakeStashCardConfig(
+	bool bForcePortrait,
 	float CardHeightRatioPortrait,
 	float CardWidthRatioLandscape,
 	float CardHeightRatioLandscape,
@@ -32,8 +38,8 @@ FStashCheckoutConfig UStashBlueprint::MakeStashCheckoutConfig(
 	float TabletWidthRatioLandscape,
 	float TabletHeightRatioLandscape)
 {
-	FStashCheckoutConfig Config;
-	Config.bForcePortraitOnCheckout = bForcePortraitOnCheckout;
+	FStashCardConfig Config;
+	Config.bForcePortrait = bForcePortrait;
 	Config.CardHeightRatioPortrait = FMath::Clamp(CardHeightRatioPortrait, 0.1f, 1.0f);
 	Config.CardWidthRatioLandscape = FMath::Clamp(CardWidthRatioLandscape, 0.1f, 1.0f);
 	Config.CardHeightRatioLandscape = FMath::Clamp(CardHeightRatioLandscape, 0.1f, 1.0f);
@@ -44,85 +50,79 @@ FStashCheckoutConfig UStashBlueprint::MakeStashCheckoutConfig(
 	return Config;
 }
 
-void UStashBlueprint::OpenCheckout(const FString& CheckoutURL)
+void UStashBlueprint::OpenCard(const FString& URL)
 {
+	if (URL.IsEmpty())
+	{
+		UE_LOG(LogStash, Warning, TEXT("[Stash] OpenCard called with empty URL"));
+		return;
+	}
 #if PLATFORM_IOS
-	UE_LOG(LogStash, Log, TEXT("[Stash] Opening checkout on iOS: %s"), *CheckoutURL);
-	[[StashPayCardWrapper sharedInstance] openCheckoutWithURL:CheckoutURL.GetNSString()];
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card on iOS: %s"), *URL);
+	[[StashNativeCardWrapper sharedInstance] openCardWithURL:URL.GetNSString()];
 #elif PLATFORM_ANDROID
-	UE_LOG(LogStash, Log, TEXT("[Stash] Opening checkout on Android: %s"), *CheckoutURL);
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card on Android: %s"), *URL);
 	AndroidUtils::CallJavaCode<void>(
 		"com/Plugins/Stash/StashHelper",
-		"OpenCheckout",
+		"OpenCard",
 		"",
-		true,  // Pass activity
-		CheckoutURL
+		true,
+		URL
 	);
 #else
-	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenCheckout called on unsupported platform"));
+	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenCard called on unsupported platform"));
 #endif
 }
 
-void UStashBlueprint::OpenCheckoutWithConfig(const FString& CheckoutURL, const FStashCheckoutConfig& Config)
+void UStashBlueprint::OpenCardWithConfig(const FString& URL, const FStashCardConfig& Config)
 {
+	if (URL.IsEmpty())
+	{
+		UE_LOG(LogStash, Warning, TEXT("[Stash] OpenCardWithConfig called with empty URL"));
+		return;
+	}
 #if PLATFORM_IOS
-	UE_LOG(LogStash, Log, TEXT("[Stash] Opening checkout with config on iOS: %s"), *CheckoutURL);
-	
-	// Apply checkout configuration
-	StashPayCardWrapper* wrapper = [StashPayCardWrapper sharedInstance];
-	[wrapper setForcePortraitOnCheckout:Config.bForcePortraitOnCheckout];
-	[wrapper setCardHeightRatioPortrait:FMath::Clamp(Config.CardHeightRatioPortrait, 0.1f, 1.0f)];
-	[wrapper setCardWidthRatioLandscape:FMath::Clamp(Config.CardWidthRatioLandscape, 0.1f, 1.0f)];
-	[wrapper setCardHeightRatioLandscape:FMath::Clamp(Config.CardHeightRatioLandscape, 0.1f, 1.0f)];
-	[wrapper setTabletWidthRatioPortrait:FMath::Clamp(Config.TabletWidthRatioPortrait, 0.1f, 1.0f)];
-	[wrapper setTabletHeightRatioPortrait:FMath::Clamp(Config.TabletHeightRatioPortrait, 0.1f, 1.0f)];
-	[wrapper setTabletWidthRatioLandscape:FMath::Clamp(Config.TabletWidthRatioLandscape, 0.1f, 1.0f)];
-	[wrapper setTabletHeightRatioLandscape:FMath::Clamp(Config.TabletHeightRatioLandscape, 0.1f, 1.0f)];
-	
-	// Open checkout
-	[wrapper openCheckoutWithURL:CheckoutURL.GetNSString()];
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card with config on iOS: %s"), *URL);
+	StashNativeCardWrapper* wrapper = [StashNativeCardWrapper sharedInstance];
+	[wrapper openCardWithURL:URL.GetNSString()
+		forcePortrait:Config.bForcePortrait
+		cardHeightRatioPortrait:FMath::Clamp(Config.CardHeightRatioPortrait, 0.1f, 1.0f)
+		cardWidthRatioLandscape:FMath::Clamp(Config.CardWidthRatioLandscape, 0.1f, 1.0f)
+		cardHeightRatioLandscape:FMath::Clamp(Config.CardHeightRatioLandscape, 0.1f, 1.0f)
+		tabletWidthRatioPortrait:FMath::Clamp(Config.TabletWidthRatioPortrait, 0.1f, 1.0f)
+		tabletHeightRatioPortrait:FMath::Clamp(Config.TabletHeightRatioPortrait, 0.1f, 1.0f)
+		tabletWidthRatioLandscape:FMath::Clamp(Config.TabletWidthRatioLandscape, 0.1f, 1.0f)
+		tabletHeightRatioLandscape:FMath::Clamp(Config.TabletHeightRatioLandscape, 0.1f, 1.0f)];
 #elif PLATFORM_ANDROID
-	UE_LOG(LogStash, Log, TEXT("[Stash] Opening checkout with config on Android: %s"), *CheckoutURL);
-	
-	// Apply checkout configuration
-	AndroidUtils::CallJavaCode<void>("com/Plugins/Stash/StashHelper", "SetForcePortraitOnCheckout", "", false,
-		Config.bForcePortraitOnCheckout);
-	AndroidUtils::CallJavaCode<void>("com/Plugins/Stash/StashHelper", "SetCardHeightRatioPortrait", "", false,
-		FMath::Clamp(Config.CardHeightRatioPortrait, 0.1f, 1.0f));
-	AndroidUtils::CallJavaCode<void>("com/Plugins/Stash/StashHelper", "SetCardWidthRatioLandscape", "", false,
-		FMath::Clamp(Config.CardWidthRatioLandscape, 0.1f, 1.0f));
-	AndroidUtils::CallJavaCode<void>("com/Plugins/Stash/StashHelper", "SetCardHeightRatioLandscape", "", false,
-		FMath::Clamp(Config.CardHeightRatioLandscape, 0.1f, 1.0f));
-	AndroidUtils::CallJavaCode<void>("com/Plugins/Stash/StashHelper", "SetTabletWidthRatioPortrait", "", false,
-		FMath::Clamp(Config.TabletWidthRatioPortrait, 0.1f, 1.0f));
-	AndroidUtils::CallJavaCode<void>("com/Plugins/Stash/StashHelper", "SetTabletHeightRatioPortrait", "", false,
-		FMath::Clamp(Config.TabletHeightRatioPortrait, 0.1f, 1.0f));
-	AndroidUtils::CallJavaCode<void>("com/Plugins/Stash/StashHelper", "SetTabletWidthRatioLandscape", "", false,
-		FMath::Clamp(Config.TabletWidthRatioLandscape, 0.1f, 1.0f));
-	AndroidUtils::CallJavaCode<void>("com/Plugins/Stash/StashHelper", "SetTabletHeightRatioLandscape", "", false,
-		FMath::Clamp(Config.TabletHeightRatioLandscape, 0.1f, 1.0f));
-	
-	// Open checkout
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card with config on Android: %s"), *URL);
 	AndroidUtils::CallJavaCode<void>(
 		"com/Plugins/Stash/StashHelper",
-		"OpenCheckout",
+		"OpenCardWithConfig",
 		"",
-		true,  // Pass activity
-		CheckoutURL
+		true,
+		URL,
+		Config.bForcePortrait,
+		FMath::Clamp(Config.CardHeightRatioPortrait, 0.1f, 1.0f),
+		FMath::Clamp(Config.CardWidthRatioLandscape, 0.1f, 1.0f),
+		FMath::Clamp(Config.CardHeightRatioLandscape, 0.1f, 1.0f),
+		FMath::Clamp(Config.TabletWidthRatioPortrait, 0.1f, 1.0f),
+		FMath::Clamp(Config.TabletHeightRatioPortrait, 0.1f, 1.0f),
+		FMath::Clamp(Config.TabletWidthRatioLandscape, 0.1f, 1.0f),
+		FMath::Clamp(Config.TabletHeightRatioLandscape, 0.1f, 1.0f)
 	);
 #else
-	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenCheckoutWithConfig called on unsupported platform"));
+	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenCardWithConfig called on unsupported platform"));
 #endif
 }
 
-bool UStashBlueprint::IsCheckoutOpen()
+bool UStashBlueprint::IsCardOpen()
 {
 #if PLATFORM_IOS
-	return [[StashPayCardWrapper sharedInstance] isCheckoutOpen];
+	return [[StashNativeCardWrapper sharedInstance] isCardOpen];
 #elif PLATFORM_ANDROID
 	return AndroidUtils::CallJavaCode<bool>(
 		"com/Plugins/Stash/StashHelper",
-		"IsCheckoutOpen",
+		"IsCardOpen",
 		"",
 		false
 	);
@@ -131,31 +131,88 @@ bool UStashBlueprint::IsCheckoutOpen()
 #endif
 }
 
-void UStashBlueprint::DismissCheckout()
+bool UStashBlueprint::IsPurchaseProcessing()
 {
 #if PLATFORM_IOS
-	UE_LOG(LogStash, Log, TEXT("[Stash] Dismissing checkout on iOS"));
-	[[StashPayCardWrapper sharedInstance] dismissCheckout];
+	return [[StashNativeCardWrapper sharedInstance] isPurchaseProcessing];
 #elif PLATFORM_ANDROID
-	UE_LOG(LogStash, Log, TEXT("[Stash] Dismissing checkout on Android"));
+	return AndroidUtils::CallJavaCode<bool>(
+		"com/Plugins/Stash/StashHelper",
+		"IsPurchaseProcessing",
+		"",
+		false
+	);
+#else
+	return false;
+#endif
+}
+
+void UStashBlueprint::DismissCard()
+{
+#if PLATFORM_IOS
+	UE_LOG(LogStash, Log, TEXT("[Stash] Dismissing card on iOS"));
+	[[StashNativeCardWrapper sharedInstance] dismissCard];
+#elif PLATFORM_ANDROID
+	UE_LOG(LogStash, Log, TEXT("[Stash] Dismissing card on Android"));
 	AndroidUtils::CallJavaCode<void>(
 		"com/Plugins/Stash/StashHelper",
-		"DismissCheckout",
+		"DismissCard",
 		"",
-		true  // Pass activity
+		true
 	);
 #endif
 }
 
+void UStashBlueprint::OpenBrowser(const FString& URL)
+{
+	if (URL.IsEmpty())
+	{
+		UE_LOG(LogStash, Warning, TEXT("[Stash] OpenBrowser called with empty URL"));
+		return;
+	}
+#if PLATFORM_IOS
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening browser on iOS: %s"), *URL);
+	[[StashNativeCardWrapper sharedInstance] openBrowserWithURL:URL.GetNSString()];
+#elif PLATFORM_ANDROID
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening browser on Android: %s"), *URL);
+	AndroidUtils::CallJavaCode<void>(
+		"com/Plugins/Stash/StashHelper",
+		"OpenBrowser",
+		"",
+		true,
+		URL
+	);
+#else
+	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenBrowser called on unsupported platform"));
+#endif
+}
+
+void UStashBlueprint::CloseBrowser()
+{
+#if PLATFORM_IOS
+	UE_LOG(LogStash, Log, TEXT("[Stash] Closing browser on iOS"));
+	[[StashNativeCardWrapper sharedInstance] closeBrowser];
+#elif PLATFORM_ANDROID
+	// No-op on Android (Chrome Custom Tabs cannot be closed by the app)
+#else
+	UE_LOG(LogStash, Warning, TEXT("[Stash] CloseBrowser called on unsupported platform"));
+#endif
+}
+
 // ============================================================================
-// Modal Presentation (SDK 1.2.0+)
+// Modal Presentation (Stash Native 2.0)
 // ============================================================================
 
 void UStashBlueprint::OpenModal(const FString& URL)
 {
+	if (URL.IsEmpty())
+	{
+		UE_LOG(LogStash, Warning, TEXT("[Stash] OpenModal called with empty URL"));
+		return;
+	}
 #if PLATFORM_IOS
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening modal on iOS: %s"), *URL);
-	[[StashPayCardWrapper sharedInstance] openModalWithURL:URL.GetNSString()];
+	[[StashNativeCardWrapper sharedInstance] openModalWithURL:URL.GetNSString()];
 #elif PLATFORM_ANDROID
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening modal on Android: %s"), *URL);
 	AndroidUtils::CallJavaCode<void>(
@@ -172,9 +229,14 @@ void UStashBlueprint::OpenModal(const FString& URL)
 
 void UStashBlueprint::OpenModalWithConfig(const FString& URL, const FStashModalConfig& Config)
 {
+	if (URL.IsEmpty())
+	{
+		UE_LOG(LogStash, Warning, TEXT("[Stash] OpenModalWithConfig called with empty URL"));
+		return;
+	}
 #if PLATFORM_IOS
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening modal with config on iOS: %s"), *URL);
-	[[StashPayCardWrapper sharedInstance] openModalWithURL:URL.GetNSString()
+	[[StashNativeCardWrapper sharedInstance] openModalWithURL:URL.GetNSString()
 		showDragBar:Config.bShowDragBar
 		allowDismiss:Config.bAllowDismiss
 		phoneWidthRatioPortrait:Config.PhoneWidthRatioPortrait
@@ -210,41 +272,63 @@ void UStashBlueprint::OpenModalWithConfig(const FString& URL, const FStashModalC
 }
 
 // ============================================================================
-// Configuration (SDK 1.2.0+)
+// Configuration (Stash Native 2.0)
 // ============================================================================
 
-void UStashBlueprint::SetForceWebBasedCheckout(bool bForce)
+void UStashBlueprint::SetLandscapeLockWhenCardClosed(bool bEnable)
 {
 #if PLATFORM_IOS
-	UE_LOG(LogStash, Log, TEXT("[Stash] Setting force web-based checkout: %s"), bForce ? TEXT("true") : TEXT("false"));
-	[[StashPayCardWrapper sharedInstance] setForceWebBasedCheckout:bForce];
-#elif PLATFORM_ANDROID
-	UE_LOG(LogStash, Log, TEXT("[Stash] Setting force web-based checkout: %s"), bForce ? TEXT("true") : TEXT("false"));
-	AndroidUtils::CallJavaCode<void>(
-		"com/Plugins/Stash/StashHelper",
-		"SetForceWebBasedCheckout",
-		"",
-		false,
-		bForce
-	);
-#endif
-}
-
-void UStashBlueprint::SetLandscapeLockWhenCheckoutClosed(bool bEnable)
-{
-#if PLATFORM_IOS
-	[[StashPayCardWrapper sharedInstance] setLandscapeLockWhenCheckoutClosed:bEnable];
+	[[StashNativeCardWrapper sharedInstance] setLandscapeLockWhenCardClosed:bEnable];
 #else
 	// Android: no-op; orientation lock is handled by project/activity settings
 	(void)bEnable;
 #endif
 }
 
-// Callback handlers - called from native code
+/** Resolves Stash subsystem from an optional world context. Used by GetStashSubsystem and by native callbacks. */
+static UStashSubsystem* GetStashSubsystemFromContext(UObject* WorldContextObject)
+{
+	UWorld* World = nullptr;
+	if (WorldContextObject)
+	{
+		if (UWorld* W = Cast<UWorld>(WorldContextObject))
+		{
+			World = W;
+		}
+		else if (AActor* A = Cast<AActor>(WorldContextObject))
+		{
+			World = A->GetWorld();
+		}
+		else if (APlayerController* PC = Cast<APlayerController>(WorldContextObject))
+		{
+			World = PC->GetWorld();
+		}
+		else if (UGameInstance* GI = Cast<UGameInstance>(WorldContextObject))
+		{
+			if (FWorldContext* const Ctx = GI->GetWorldContext())
+			{
+				World = Ctx->World();
+			}
+		}
+	}
+	if (!World && GEngine)
+	{
+		World = GEngine->GetCurrentPlayWorld();
+	}
+	UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
+	return GI ? GI->GetSubsystem<UStashSubsystem>() : nullptr;
+}
+
+UStashSubsystem* UStashBlueprint::GetStashSubsystem(UObject* WorldContextObject)
+{
+	return GetStashSubsystemFromContext(WorldContextObject);
+}
+
 void UStashBlueprint::HandlePaymentSuccess()
 {
 	UE_LOG(LogStash, Log, TEXT("[Stash] Payment success callback received"));
 	AsyncTask(ENamedThreads::GameThread, []() {
+		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr)) { Sub->OnPaymentSuccess.Broadcast(); }
 		OnPaymentSuccess.Broadcast();
 	});
 }
@@ -253,6 +337,7 @@ void UStashBlueprint::HandlePaymentFailure()
 {
 	UE_LOG(LogStash, Log, TEXT("[Stash] Payment failure callback received"));
 	AsyncTask(ENamedThreads::GameThread, []() {
+		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr)) { Sub->OnPaymentFailure.Broadcast(); }
 		OnPaymentFailure.Broadcast();
 	});
 }
@@ -261,6 +346,7 @@ void UStashBlueprint::HandleDialogDismissed()
 {
 	UE_LOG(LogStash, Log, TEXT("[Stash] Dialog dismissed callback received"));
 	AsyncTask(ENamedThreads::GameThread, []() {
+		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr)) { Sub->OnDialogDismissed.Broadcast(); }
 		OnDialogDismissed.Broadcast();
 	});
 }
@@ -269,6 +355,7 @@ void UStashBlueprint::HandleOptInResponse(const FString& OptInType)
 {
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opt-in response received: %s"), *OptInType);
 	AsyncTask(ENamedThreads::GameThread, [OptInType]() {
+		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr)) { Sub->OnOptInResponse.Broadcast(OptInType); }
 		OnOptInResponse.Broadcast(OptInType);
 	});
 }
@@ -277,6 +364,7 @@ void UStashBlueprint::HandlePageLoaded(float LoadTimeMs)
 {
 	UE_LOG(LogStash, Log, TEXT("[Stash] Page loaded callback received: %.2f ms"), LoadTimeMs);
 	AsyncTask(ENamedThreads::GameThread, [LoadTimeMs]() {
+		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr)) { Sub->OnPageLoaded.Broadcast(LoadTimeMs); }
 		OnPageLoaded.Broadcast(LoadTimeMs);
 	});
 }
@@ -285,39 +373,40 @@ void UStashBlueprint::HandleNetworkError()
 {
 	UE_LOG(LogStash, Warning, TEXT("[Stash] Network error callback received"));
 	AsyncTask(ENamedThreads::GameThread, []() {
+		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr)) { Sub->OnNetworkError.Broadcast(); }
 		OnNetworkError.Broadcast();
 	});
 }
 
-// iOS Callback bridge functions (called from StashPayCardWrapper.mm)
+// iOS callback bridge (called from StashNativeCardWrapper.mm)
 #if PLATFORM_IOS
 extern "C" {
-	void StashPayOnPaymentSuccess()
+	void StashNativeOnPaymentSuccess()
 	{
 		UStashBlueprint::HandlePaymentSuccess();
 	}
-	
-	void StashPayOnPaymentFailure()
+
+	void StashNativeOnPaymentFailure()
 	{
 		UStashBlueprint::HandlePaymentFailure();
 	}
-	
-	void StashPayOnDialogDismissed()
+
+	void StashNativeOnDialogDismissed()
 	{
 		UStashBlueprint::HandleDialogDismissed();
 	}
-	
-	void StashPayOnOptInResponse(const char* optinType)
+
+	void StashNativeOnOptInResponse(const char* optinType)
 	{
 		UStashBlueprint::HandleOptInResponse(FString(UTF8_TO_TCHAR(optinType ? optinType : "")));
 	}
-	
-	void StashPayOnPageLoaded(double loadTimeMs)
+
+	void StashNativeOnPageLoaded(double loadTimeMs)
 	{
 		UStashBlueprint::HandlePageLoaded((float)loadTimeMs);
 	}
-	
-	void StashPayOnNetworkError()
+
+	void StashNativeOnNetworkError()
 	{
 		UStashBlueprint::HandleNetworkError();
 	}

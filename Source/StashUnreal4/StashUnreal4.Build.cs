@@ -13,7 +13,8 @@ public class StashUnreal4 : ModuleRules
             "Core",
             "CoreUObject",
             "Engine",
-            "InputCore"
+            "InputCore",
+            "Stash"
         });
     }
 }

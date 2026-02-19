@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Pay Unreal Engine SDK - Module Interface
+// Stash Unreal Engine SDK - Module Interface
 
 #pragma once
 
@@ -9,9 +9,9 @@
 DECLARE_LOG_CATEGORY_EXTERN(LogStash, Log, All);
 
 /**
- * Stash Pay Module
- * 
- * Main module for the Stash Pay checkout integration plugin.
+ * Stash Module
+ *
+ * Main module for the Stash Native integration plugin (card, modal, browser).
  * Handles platform initialization and provides support checking.
  */
 class FStashModule : public IModuleInterface
@@ -23,6 +23,6 @@ public:
 	/** Initialize platform-specific components */
 	void Initialization();
 
-	/** Check if the current platform supports Stash Pay */
+	/** Check if the current platform supports Stash Native */
 	static bool IsSupported();
 };

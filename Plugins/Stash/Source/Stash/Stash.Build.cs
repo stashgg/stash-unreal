@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Pay Unreal Engine SDK - Build Configuration
+// Stash Unreal Engine SDK - Build Configuration (StashNative 2.0.0)
 
 using System.IO;
 using UnrealBuildTool;
@@ -62,7 +62,7 @@ public class Stash : ModuleRules
 
 			PrivateIncludePaths.AddRange(new string[] { Path.Combine(ModuleDirectory, "Private", "IOS") });
 
-			// Required Apple frameworks for StashPay SDK
+			// Required Apple frameworks for StashNative SDK
 			PublicFrameworks.AddRange(new string[]
 			{
 				"UIKit",
@@ -73,15 +73,13 @@ public class Stash : ModuleRules
 				"QuartzCore",
 			});
 
-			// Add pre-built StashPay XCFramework
-			string XCFrameworkPath = Path.Combine(ThirdPartyPath, "iOS", "StashPay.xcframework");
+			// Add pre-built StashNative XCFramework
+			string XCFrameworkPath = Path.Combine(ThirdPartyPath, "iOS", "StashNative.xcframework");
 			if (Directory.Exists(XCFrameworkPath))
 			{
-				// For UE4.27+, use PublicAdditionalFrameworks with the ios-arm64 framework inside the xcframework
-				string FrameworkPath = Path.Combine(XCFrameworkPath, "ios-arm64", "StashPay.framework");
-				PublicAdditionalFrameworks.Add(new Framework("StashPay", FrameworkPath, null, true));
-				
-				// Add framework headers to include path for #import <StashPay/StashPayCard.h>
+				string FrameworkPath = Path.Combine(XCFrameworkPath, "ios-arm64", "StashNative.framework");
+				PublicAdditionalFrameworks.Add(new Framework("StashNative", FrameworkPath, null, true));
+
 				string HeaderPath = Path.Combine(FrameworkPath, "Headers");
 				PublicIncludePaths.Add(HeaderPath);
 			}

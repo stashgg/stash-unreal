@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Pay Unreal Engine SDK - Module Implementation
+// Stash Unreal Engine SDK - Module Implementation
 
 #include "Stash.h"
 #include "StashEditorSettings.h"
@@ -28,8 +28,8 @@ void FStashModule::StartupModule()
 void FStashModule::ShutdownModule()
 {
 	// No cleanup needed - native SDKs handle their own lifecycle
-	// iOS: StashPayCardWrapper is a singleton that persists
-	// Android: StashPayCard is a singleton managed by the SDK
+	// iOS: StashNativeCardWrapper is a singleton that persists
+	// Android: StashNativeCard is a singleton managed by the SDK
 }
 
 void FStashModule::Initialization()
@@ -39,7 +39,7 @@ void FStashModule::Initialization()
 #endif
 
 #if PLATFORM_IOS
-	// iOS initialization handled by StashPayCardWrapper
+	// iOS initialization handled by StashNativeCardWrapper
 #endif
 }
 

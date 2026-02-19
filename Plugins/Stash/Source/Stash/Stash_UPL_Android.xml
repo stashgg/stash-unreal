@@ -73,7 +73,7 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
       -keep interface com.Plugins.** { *; }
       -keep public class com.Plugins.Stash.** { public protected *; }
 
-      <!-- Stash Pay SDK classes -->
+      <!-- Stash Native SDK classes -->
       -dontwarn com.stash.**
       -keep class com.stash.** { *; }
       -keep interface com.stash.** { *; }
@@ -165,11 +165,11 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
 
       implementation 'androidx.work:work-runtime:2.7.1'
       
-      // Stash Pay SDK - pre-built AAR
-      implementation(name: 'StashPay', ext: 'aar')
+      // Stash Native SDK - pre-built AAR (StashNative 2.0.0)
+      implementation(name: 'StashNative', ext: 'aar')
       
       // Dependencies required by Stash Pay SDK
-      implementation 'androidx.browser:browser:1.4.0'
+      implementation 'androidx.browser:browser:1.7.0'
       implementation 'androidx.webkit:webkit:1.5.0'
       }
     </insert>
@@ -224,9 +224,9 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
 
   </buildscriptGradleAdditions>
 
-  <!-- Copy pre-built Stash Pay AAR to gradle project libs folder -->
+  <!-- Copy pre-built Stash Native AAR to gradle project libs folder -->
   <gradleCopies>
-    <copyFile src="$S(PluginDir)/ThirdParty/Android/StashPay.aar" dst="$S(BuildDir)/gradle/app/libs/StashPay.aar" />
+    <copyFile src="$S(PluginDir)/ThirdParty/Android/StashNative-2.0.0.aar" dst="$S(BuildDir)/gradle/app/libs/StashNative.aar" />
   </gradleCopies>
 
 
