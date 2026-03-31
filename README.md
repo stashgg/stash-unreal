@@ -7,7 +7,7 @@
 > **For Unreal Engine 5:**  
 > This branch targets Unreal Engine 4.27+. For new projects, we recommend Unreal Engine 5 with our actively maintained SDK. See the [main branch](https://github.com/stashgg/stash-unreal) for UE5 support.
 
-Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash-native), enabling Stash Pay IAP checkout and webshop presentation on Android and iOS via C++ and Blueprints. The plugin uses **Stash Native** (stash-native **2.1.1+** recommended; see `ThirdParty` binaries) only—no StashPay references.
+Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash-native), enabling Stash Pay IAP checkout and webshop presentation on Android and iOS via C++ and Blueprints. The plugin uses **Stash Native** (**2.1.1+**).
 
 ## Requirements
 
@@ -138,15 +138,23 @@ Stash Native card on phone is designed for portrait. If your game is **landscape
 
 ---
 
-### Android keep-alive service (Stash Native 2.1+)
+### Android keep-alive service (Android, Optional)
 
-On low-memory or Android Go–class devices, the OS may kill your app when the user leaves for **Chrome Custom Tabs** during checkout. Stash Native can run a short **foreground service** with a low-priority notification so the process is more likely to survive.
+On low-memory or Android Go-class devices, the Android OS may kill your app when the user leaves for **Chrome Custom Tabs** during checkout. Stash Native can run a short **foreground service** with a low-priority notification to prevent the game from suspending.
 
-- **Default:** keep-alive is **off** in the native SDK; enable explicitly if you need it.
+- **Default:** keep-alive is **off**; enable explicitly if you need it.
 - **Manifest:** the Stash Native AAR merges the required service and permissions; you normally do not add them by hand.
-- **Plugin:** call **Set Android Keep Alive Enabled** (`true`), then optionally **Set Android Keep Alive Config** with notification title and text (`FStashKeepAliveConfig`).
+
+#### Blueprint
+
+1. Call **Set Android Keep Alive Enabled** (Stash category) with **true** — e.g. once at startup (**Begin Play**) or before opening checkout.
+2. Optionally: add **Make StashKeepAliveConfig** (or **Make** for struct **Stash Keep Alive Config**), set **Notification Title** and **Notification Text** (e.g. “Payment in progress” / “Tap to return to the app”), then call **Set Android Keep Alive Config** with that struct.
+
+#### C++
 
 ```cpp
+#include "StashBlueprint.h"
+
 UStashBlueprint::SetAndroidKeepAliveEnabled(true);
 FStashKeepAliveConfig KA;
 KA.NotificationTitle = TEXT("Payment in progress");
@@ -154,9 +162,10 @@ KA.NotificationText = TEXT("Tap to return to the app");
 UStashBlueprint::SetAndroidKeepAliveConfig(KA);
 ```
 
-**Platform:** Android only. No effect on iOS.
+**If you will never use keep-alive** (no **Set Android Keep Alive Enabled** set to true, no need for the foreground service), you can trim **`Plugins/Stash/Source/Stash/Stash_UPL_Android.xml`** so Gradle does not pull the keep-alive–related pins:
 
-See [stash-native README – openBrowser / keep-alive](https://github.com/stashgg/stash-native/blob/main/README.md) for full details (Android 14+ time limits, opting out of the merged service, etc.).
+1. **Remove the `androidx.core:core` dependency** — Delete the **`implementation 'androidx.core:core:1.13.1'`** line and the two-line comment directly above it (*“Stash Native 2.1+ keep-alive calls ServiceCompat…”*). Unreal’s default transitive **`androidx.core`** is then used; that is usually enough when keep-alive is never started.
+2. **Remove the Kotlin resolution block** — Delete the entire **`<insert>`** that contains **`configurations.all { resolutionStrategy.eachDependency { ... } }`**, plus the **XML comment** immediately above it (*“androidx.core:1.13.x pulls kotlin-stdlib…”*). That block fixes **Kotlin duplicate-class** errors that show up **because** Core 1.13.x was added; if you drop the Core pin, you typically drop this too.
 
 ---
 
@@ -242,6 +251,8 @@ Use the **Stash** category nodes for Open Card, Open Modal, Open Browser, config
 - **Blueprint shows old nodes (Open Checkout, Set Force Web Based Checkout):** The plugin API is **Open Card**, **Open Card With Config**, **Open Browser**, **Close Browser**, **Is Card Open**, **Dismiss Card** (no Open Checkout, no Force Web Based). If you still see old names, do a **clean rebuild**: close the editor, delete the `Intermediate` and `Binaries` folders in your project root, then reopen the `.uproject`. The editor will recompile and Blueprint will show only the new Stash nodes.
 - **iOS – undefined symbol / Library not loaded:** Add WebKit and SafariServices if needed; ensure **StashNative.xcframework** is embedded (Embed & Sign) and present under `Plugins/Stash/Source/Stash/ThirdParty/iOS/`.
 - **Android – class not found / blank card:** Ensure **StashNative** AAR is in `ThirdParty/Android/` (e.g. `StashNative-2.1.1.aar`). Add internet permission. ProGuard: keep `com.stash.**`.
+- **Android – crash on Open Browser with keep-alive:** `NoSuchMethodError` on `ServiceCompat.startForeground(Service, int, Notification, int)` means **`androidx.core` is too old** in the packaged APK. Ensure `Stash_UPL_Android.xml` still includes **`implementation 'androidx.core:core:1.13.1'`** (or newer); see the **Android keep-alive service** section above.
+- **Android – Gradle `checkDebugDuplicateClasses` (Kotlin):** Duplicate classes in `kotlin-stdlib` vs `kotlin-stdlib-jdk7` / `kotlin-stdlib-jdk8` usually means mixed Kotlin versions. The plugin’s UPL should force **`org.jetbrains.kotlin` to 1.8.22**; if you still see this after merging other Gradle snippets, align or exclude conflicting Kotlin artifacts.
 - **Xcode: "ExternalBuildToolExecution failed" / "never received target ended message":** The real error is from UnrealBuildTool. Check `~/Library/Application Support/Epic/UnrealBuildTool/Log.txt`. Clear Xcode caches: delete `~/Library/Developer/Xcode/DerivedData`, then regenerate project files and reopen. Alternatively, build from Unreal Editor (open the `.uproject`) or from the command line with the engine's `Build.sh` instead of Xcode.
 
 ---

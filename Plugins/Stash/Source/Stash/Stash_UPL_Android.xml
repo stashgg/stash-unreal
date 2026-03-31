@@ -153,6 +153,18 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
       }
     </insert>
 
+    <!-- androidx.core:1.13.x pulls kotlin-stdlib 1.8.x; other deps may still pull kotlin-stdlib-jdk7/jdk8 1.6.x,
+         which duplicate classes merged into kotlin-stdlib 1.8+ → checkDebugDuplicateClasses fails. -->
+    <insert>
+      configurations.all {
+        resolutionStrategy.eachDependency { details ->
+          if (details.requested.group == 'org.jetbrains.kotlin') {
+            details.useVersion '1.8.22'
+          }
+        }
+      }
+    </insert>
+
     <!-- dependencies *.AAR libraries -->
     <insert>
       dependencies {
@@ -163,9 +175,13 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
       implementation 'com.google.guava:guava:28.2-android'
       implementation 'androidx.annotation:annotation:1.0.0'
 
+      // Stash Native 2.1+ keep-alive calls ServiceCompat.startForeground(Service, int, Notification, int).
+      // UE4's default transitive androidx.core is often too old → NoSuchMethodError without an explicit pin.
+      implementation 'androidx.core:core:1.13.1'
+
       implementation 'androidx.work:work-runtime:2.7.1'
       
-      // Stash Native SDK - pre-built AAR (StashNative 2.0.0)
+      // Stash Native SDK - pre-built AAR (see gradleCopies StashNative-*.aar → libs/StashNative.aar)
       implementation(name: 'StashNative', ext: 'aar')
       
       // Dependencies required by Stash Pay SDK
