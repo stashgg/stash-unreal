@@ -43,4 +43,8 @@ public:
 	/** Called when a network error occurs. Bind in Blueprint via Add On Network Error. */
 	UPROPERTY(BlueprintAssignable, Category = "Stash")
 	FOnStashNetworkError OnNetworkError;
+
+	/** Called when checkout requests an external payment URL. Bind in Blueprint via Add On External Payment. */
+	UPROPERTY(BlueprintAssignable, Category = "Stash")
+	FOnStashExternalPayment OnExternalPayment;
 };

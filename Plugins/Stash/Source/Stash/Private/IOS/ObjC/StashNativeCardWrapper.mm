@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Unreal Engine SDK - iOS Wrapper Implementation (Stash Native 2.0.0)
+// Stash Unreal Engine SDK - iOS Wrapper Implementation (Stash Native 2.1+)
 
 #import "StashNativeCardWrapper.h"
 #import <StashNative/StashNative.h>
@@ -13,6 +13,7 @@ extern "C" {
 	void StashNativeOnOptInResponse(const char* optinType);
 	void StashNativeOnPageLoaded(double loadTimeMs);
 	void StashNativeOnNetworkError(void);
+	void StashNativeOnExternalPayment(const char* url);
 }
 
 #pragma mark - StashNativeDelegateBridge
@@ -54,6 +55,12 @@ extern "C" {
 - (void)stashNativeCardDidEncounterNetworkError
 {
 	StashNativeOnNetworkError();
+}
+
+- (void)stashNativeCardDidRequestExternalPaymentWithURL:(NSString*)url
+{
+	const char* utf8 = url ? [url UTF8String] : "";
+	if (utf8) StashNativeOnExternalPayment(utf8);
 }
 
 @end
@@ -258,6 +265,7 @@ static StashNativeCardWrapper* _sharedInstance = nil;
     tabletHeightRatioPortrait:(float)tabletHeightRatioPortrait
     tabletWidthRatioLandscape:(float)tabletWidthRatioLandscape
     tabletHeightRatioLandscape:(float)tabletHeightRatioLandscape
+    backgroundColor:(NSString*)backgroundColor
 {
 	if (!urlString || urlString.length == 0) return;
 
@@ -271,6 +279,10 @@ static StashNativeCardWrapper* _sharedInstance = nil;
 		config.tabletHeightRatioPortrait = tabletHeightRatioPortrait;
 		config.tabletWidthRatioLandscape = tabletWidthRatioLandscape;
 		config.tabletHeightRatioLandscape = tabletHeightRatioLandscape;
+		if (backgroundColor != nil && backgroundColor.length > 0)
+		{
+			config.backgroundColor = backgroundColor;
+		}
 		[[StashNativeCard sharedInstance] openCardWithURL:urlString config:config];
 	});
 }
@@ -300,14 +312,12 @@ static StashNativeCardWrapper* _sharedInstance = nil;
 
 	dispatch_async(dispatch_get_main_queue(), ^{
 		StashNativeModalConfig* config = [[StashNativeModalConfig alloc] init];
-		config.showDragBar = YES;
 		config.allowDismiss = YES;
 		[[StashNativeCard sharedInstance] openModalWithURL:urlString config:config];
 	});
 }
 
 - (void)openModalWithURL:(NSString*)urlString
-              showDragBar:(BOOL)showDragBar
              allowDismiss:(BOOL)allowDismiss
    phoneWidthRatioPortrait:(float)phoneWidthRatioPortrait
   phoneHeightRatioPortrait:(float)phoneHeightRatioPortrait
@@ -317,12 +327,12 @@ static StashNativeCardWrapper* _sharedInstance = nil;
  tabletHeightRatioPortrait:(float)tabletHeightRatioPortrait
  tabletWidthRatioLandscape:(float)tabletWidthRatioLandscape
 tabletHeightRatioLandscape:(float)tabletHeightRatioLandscape
+    backgroundColor:(NSString*)backgroundColor
 {
 	if (!urlString || urlString.length == 0) return;
 
 	dispatch_async(dispatch_get_main_queue(), ^{
 		StashNativeModalConfig* config = [[StashNativeModalConfig alloc] init];
-		config.showDragBar = showDragBar;
 		config.allowDismiss = allowDismiss;
 		config.phoneWidthRatioPortrait = phoneWidthRatioPortrait;
 		config.phoneHeightRatioPortrait = phoneHeightRatioPortrait;
@@ -332,6 +342,10 @@ tabletHeightRatioLandscape:(float)tabletHeightRatioLandscape
 		config.tabletHeightRatioPortrait = tabletHeightRatioPortrait;
 		config.tabletWidthRatioLandscape = tabletWidthRatioLandscape;
 		config.tabletHeightRatioLandscape = tabletHeightRatioLandscape;
+		if (backgroundColor != nil && backgroundColor.length > 0)
+		{
+			config.backgroundColor = backgroundColor;
+		}
 		[[StashNativeCard sharedInstance] openModalWithURL:urlString config:config];
 	});
 }

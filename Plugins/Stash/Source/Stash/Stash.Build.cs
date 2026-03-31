@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Unreal Engine SDK - Build Configuration (StashNative 2.0.0)
+// Stash Unreal Engine SDK - Build Configuration (Stash Native 2.1+)
 
 using System.IO;
 using UnrealBuildTool;

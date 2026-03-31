@@ -27,6 +27,7 @@ FOnStashDialogDismissed UStashBlueprint::OnDialogDismissed;
 FOnStashOptInResponse UStashBlueprint::OnOptInResponse;
 FOnStashPageLoaded UStashBlueprint::OnPageLoaded;
 FOnStashNetworkError UStashBlueprint::OnNetworkError;
+FOnStashExternalPayment UStashBlueprint::OnExternalPayment;
 
 FStashCardConfig UStashBlueprint::MakeStashCardConfig(
 	bool bForcePortrait,
@@ -84,6 +85,7 @@ void UStashBlueprint::OpenCardWithConfig(const FString& URL, const FStashCardCon
 #if PLATFORM_IOS
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card with config on iOS: %s"), *URL);
 	StashNativeCardWrapper* wrapper = [StashNativeCardWrapper sharedInstance];
+	NSString* bgColor = Config.BackgroundColor.IsEmpty() ? nil : Config.BackgroundColor.GetNSString();
 	[wrapper openCardWithURL:URL.GetNSString()
 		forcePortrait:Config.bForcePortrait
 		cardHeightRatioPortrait:FMath::Clamp(Config.CardHeightRatioPortrait, 0.1f, 1.0f)
@@ -92,7 +94,8 @@ void UStashBlueprint::OpenCardWithConfig(const FString& URL, const FStashCardCon
 		tabletWidthRatioPortrait:FMath::Clamp(Config.TabletWidthRatioPortrait, 0.1f, 1.0f)
 		tabletHeightRatioPortrait:FMath::Clamp(Config.TabletHeightRatioPortrait, 0.1f, 1.0f)
 		tabletWidthRatioLandscape:FMath::Clamp(Config.TabletWidthRatioLandscape, 0.1f, 1.0f)
-		tabletHeightRatioLandscape:FMath::Clamp(Config.TabletHeightRatioLandscape, 0.1f, 1.0f)];
+		tabletHeightRatioLandscape:FMath::Clamp(Config.TabletHeightRatioLandscape, 0.1f, 1.0f)
+		backgroundColor:bgColor];
 #elif PLATFORM_ANDROID
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card with config on Android: %s"), *URL);
 	AndroidUtils::CallJavaCode<void>(
@@ -108,7 +111,8 @@ void UStashBlueprint::OpenCardWithConfig(const FString& URL, const FStashCardCon
 		FMath::Clamp(Config.TabletWidthRatioPortrait, 0.1f, 1.0f),
 		FMath::Clamp(Config.TabletHeightRatioPortrait, 0.1f, 1.0f),
 		FMath::Clamp(Config.TabletWidthRatioLandscape, 0.1f, 1.0f),
-		FMath::Clamp(Config.TabletHeightRatioLandscape, 0.1f, 1.0f)
+		FMath::Clamp(Config.TabletHeightRatioLandscape, 0.1f, 1.0f),
+		Config.BackgroundColor
 	);
 #else
 	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenCardWithConfig called on unsupported platform"));
@@ -236,8 +240,8 @@ void UStashBlueprint::OpenModalWithConfig(const FString& URL, const FStashModalC
 	}
 #if PLATFORM_IOS
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening modal with config on iOS: %s"), *URL);
+	NSString* modalBg = Config.BackgroundColor.IsEmpty() ? nil : Config.BackgroundColor.GetNSString();
 	[[StashNativeCardWrapper sharedInstance] openModalWithURL:URL.GetNSString()
-		showDragBar:Config.bShowDragBar
 		allowDismiss:Config.bAllowDismiss
 		phoneWidthRatioPortrait:Config.PhoneWidthRatioPortrait
 		phoneHeightRatioPortrait:Config.PhoneHeightRatioPortrait
@@ -246,7 +250,8 @@ void UStashBlueprint::OpenModalWithConfig(const FString& URL, const FStashModalC
 		tabletWidthRatioPortrait:Config.TabletWidthRatioPortrait
 		tabletHeightRatioPortrait:Config.TabletHeightRatioPortrait
 		tabletWidthRatioLandscape:Config.TabletWidthRatioLandscape
-		tabletHeightRatioLandscape:Config.TabletHeightRatioLandscape];
+		tabletHeightRatioLandscape:Config.TabletHeightRatioLandscape
+		backgroundColor:modalBg];
 #elif PLATFORM_ANDROID
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening modal with config on Android: %s"), *URL);
 	AndroidUtils::CallJavaCode<void>(
@@ -255,7 +260,6 @@ void UStashBlueprint::OpenModalWithConfig(const FString& URL, const FStashModalC
 		"",
 		true,  // Pass activity
 		URL,
-		Config.bShowDragBar,
 		Config.bAllowDismiss,
 		Config.PhoneWidthRatioPortrait,
 		Config.PhoneHeightRatioPortrait,
@@ -264,7 +268,8 @@ void UStashBlueprint::OpenModalWithConfig(const FString& URL, const FStashModalC
 		Config.TabletWidthRatioPortrait,
 		Config.TabletHeightRatioPortrait,
 		Config.TabletWidthRatioLandscape,
-		Config.TabletHeightRatioLandscape
+		Config.TabletHeightRatioLandscape,
+		Config.BackgroundColor
 	);
 #else
 	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenModalWithConfig called on unsupported platform"));
@@ -282,6 +287,38 @@ void UStashBlueprint::SetLandscapeLockWhenCardClosed(bool bEnable)
 #else
 	// Android: no-op; orientation lock is handled by project/activity settings
 	(void)bEnable;
+#endif
+}
+
+void UStashBlueprint::SetAndroidKeepAliveEnabled(bool bEnabled)
+{
+#if PLATFORM_ANDROID
+	AndroidUtils::CallJavaCode<void>(
+		"com/Plugins/Stash/StashHelper",
+		"SetKeepAliveEnabled",
+		"",
+		true,
+		bEnabled
+	);
+#else
+	UE_LOG(LogStash, Log, TEXT("[Stash] SetAndroidKeepAliveEnabled: no-op on this platform"));
+	(void)bEnabled;
+#endif
+}
+
+void UStashBlueprint::SetAndroidKeepAliveConfig(const FStashKeepAliveConfig& Config)
+{
+#if PLATFORM_ANDROID
+	AndroidUtils::CallJavaCode<void>(
+		"com/Plugins/Stash/StashHelper",
+		"SetKeepAliveConfig",
+		"",
+		true,
+		Config.NotificationTitle,
+		Config.NotificationText
+	);
+#else
+	UE_LOG(LogStash, Log, TEXT("[Stash] SetAndroidKeepAliveConfig: no-op on this platform"));
 #endif
 }
 
@@ -378,6 +415,15 @@ void UStashBlueprint::HandleNetworkError()
 	});
 }
 
+void UStashBlueprint::HandleExternalPayment(const FString& URL)
+{
+	UE_LOG(LogStash, Log, TEXT("[Stash] External payment URL: %s"), *URL);
+	AsyncTask(ENamedThreads::GameThread, [URL]() {
+		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr)) { Sub->OnExternalPayment.Broadcast(URL); }
+		OnExternalPayment.Broadcast(URL);
+	});
+}
+
 // iOS callback bridge (called from StashNativeCardWrapper.mm)
 #if PLATFORM_IOS
 extern "C" {
@@ -409,6 +455,11 @@ extern "C" {
 	void StashNativeOnNetworkError()
 	{
 		UStashBlueprint::HandleNetworkError();
+	}
+
+	void StashNativeOnExternalPayment(const char* url)
+	{
+		UStashBlueprint::HandleExternalPayment(FString(UTF8_TO_TCHAR(url ? url : "")));
 	}
 }
 #endif
@@ -454,6 +505,21 @@ extern "C" {
 	JNIEXPORT void JNICALL Java_com_Plugins_Stash_StashHelper_nativeOnNetworkError(JNIEnv* env, jclass clazz)
 	{
 		UStashBlueprint::HandleNetworkError();
+	}
+
+	JNIEXPORT void JNICALL Java_com_Plugins_Stash_StashHelper_nativeOnExternalPayment(JNIEnv* env, jclass clazz, jstring url)
+	{
+		FString UrlStr;
+		if (url)
+		{
+			const char* UTFString = env->GetStringUTFChars(url, nullptr);
+			if (UTFString)
+			{
+				UrlStr = FString(UTF8_TO_TCHAR(UTFString));
+				env->ReleaseStringUTFChars(url, UTFString);
+			}
+		}
+		UStashBlueprint::HandleExternalPayment(UrlStr);
 	}
 }
 #endif

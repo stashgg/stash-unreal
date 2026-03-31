@@ -7,7 +7,7 @@
 > **For Unreal Engine 5:**  
 > This branch targets Unreal Engine 4.27+. For new projects, we recommend Unreal Engine 5 with our actively maintained SDK. See the [main branch](https://github.com/stashgg/stash-unreal) for UE5 support.
 
-Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash-native), enabling Stash Pay IAP checkout and webshop presentation on Android and iOS via C++ and Blueprints. The plugin uses **Stash Native** (stash-native 2.0+) only—no StashPay references.
+Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash-native), enabling Stash Pay IAP checkout and webshop presentation on Android and iOS via C++ and Blueprints. The plugin uses **Stash Native** (stash-native **2.1.1+** recommended; see `ThirdParty` binaries) only—no StashPay references.
 
 ## Requirements
 
@@ -83,7 +83,6 @@ UStashBlueprint::OpenModal(URL);
 
 // Or with config
 FStashModalConfig Config;
-Config.bShowDragBar = true;
 Config.bAllowDismiss = true;
 // ... set phone/tablet ratios as needed
 UStashBlueprint::OpenModalWithConfig(URL, Config);
@@ -132,16 +131,38 @@ Stash Native card on phone is designed for portrait. If your game is **landscape
 
 1. **Enable portrait in project:** **Edit → Project Settings → Platform → iOS** → **Supported Orientations** → enable **Portrait** (and **Upside Down** if desired).
 2. **Call once at startup (e.g. Begin Play):**  
-   - Blueprint: Stash → **Set Landscape Lock When Checkout Closed** → **true**.  
+   - Blueprint: Stash → **Set Landscape Lock When Card Closed** → **true**.  
    - C++: `UStashBlueprint::SetLandscapeLockWhenCardClosed(true);`
 
 **Platform:** iOS only. No effect on Android.
 
 ---
 
+### Android keep-alive service (Stash Native 2.1+)
+
+On low-memory or Android Go–class devices, the OS may kill your app when the user leaves for **Chrome Custom Tabs** during checkout. Stash Native can run a short **foreground service** with a low-priority notification so the process is more likely to survive.
+
+- **Default:** keep-alive is **off** in the native SDK; enable explicitly if you need it.
+- **Manifest:** the Stash Native AAR merges the required service and permissions; you normally do not add them by hand.
+- **Plugin:** call **Set Android Keep Alive Enabled** (`true`), then optionally **Set Android Keep Alive Config** with notification title and text (`FStashKeepAliveConfig`).
+
+```cpp
+UStashBlueprint::SetAndroidKeepAliveEnabled(true);
+FStashKeepAliveConfig KA;
+KA.NotificationTitle = TEXT("Payment in progress");
+KA.NotificationText = TEXT("Tap to return to the app");
+UStashBlueprint::SetAndroidKeepAliveConfig(KA);
+```
+
+**Platform:** Android only. No effect on iOS.
+
+See [stash-native README – openBrowser / keep-alive](https://github.com/stashgg/stash-native/blob/main/README.md) for full details (Android 14+ time limits, opting out of the merged service, etc.).
+
+---
+
 ### Listening to callbacks
 
-Bind to events for payment success/failure, dismiss, opt-in, page loaded, and network error.
+Bind to events for payment success/failure, dismiss, opt-in, page loaded, network error, and external payment URLs.
 
 > **Blueprint:** You cannot bind to the Stash callbacks directly on the Blueprint function library (it has no object reference). Use **Get Stash Subsystem** to get the Stash Subsystem, then bind to its **On Payment Success**, **On Dialog Dismissed**, etc. on that object.
 
@@ -182,6 +203,8 @@ if (UStashSubsystem* Stash = UStashBlueprint::GetStashSubsystem(this))
 | `IsPurchaseProcessing()` | Returns true if a purchase is currently being processed (checkout cannot be dismissed) |
 | `DismissCard()` | Dismisses card/modal |
 | `SetLandscapeLockWhenCardClosed(bEnable)` | (iOS) Lock game to landscape when card closed |
+| `SetAndroidKeepAliveEnabled(bEnabled)` | (Android) Enable foreground keep-alive service during browser flows |
+| `SetAndroidKeepAliveConfig(Config)` | (Android) Notification title/text for keep-alive (`FStashKeepAliveConfig`) |
 | `GetStashSubsystem(WorldContextObject)` | Returns the Stash Subsystem so you can bind to On Payment Success, On Dialog Dismissed, etc. in Blueprint |
 | `MakeStashCardConfig(...)` | Builds `FStashCardConfig` for OpenCardWithConfig |
 
@@ -195,12 +218,15 @@ if (UStashSubsystem* Stash = UStashBlueprint::GetStashSubsystem(this))
 | `OnOptInResponse(OptInType)` | Opt-in / channel selection response |
 | `OnPageLoaded(LoadTimeMs)` | Page finished loading |
 | `OnNetworkError` | Network error during load |
+| `OnExternalPayment(URL)` | Checkout opened an external URL (e.g. Google Pay, Klarna, crypto); payment may complete in browser or another app; user returns via deep link |
 
 ### Config types
 
-**FStashCardConfig** (card): `bForcePortrait`, `CardHeightRatioPortrait`, `CardWidthRatioLandscape`, `CardHeightRatioLandscape`, `TabletWidthRatioPortrait`, `TabletHeightRatioPortrait`, `TabletWidthRatioLandscape`, `TabletHeightRatioLandscape`.
+**FStashCardConfig** (card): `bForcePortrait`, `CardHeightRatioPortrait`, `CardWidthRatioLandscape`, `CardHeightRatioLandscape`, `TabletWidthRatioPortrait`, `TabletHeightRatioPortrait`, `TabletWidthRatioLandscape`, `TabletHeightRatioLandscape`, **`BackgroundColor`** (optional HTML hex, e.g. `#RRGGBB`; leave empty for SDK default—see [stash-native](https://github.com/stashgg/stash-native/blob/main/README.md)).
 
-**FStashModalConfig** (modal): `bShowDragBar`, `bAllowDismiss`, `PhoneWidthRatioPortrait`, `PhoneHeightRatioPortrait`, `PhoneWidthRatioLandscape`, `PhoneHeightRatioLandscape`, `TabletWidthRatioPortrait`, `TabletHeightRatioPortrait`, `TabletWidthRatioLandscape`, `TabletHeightRatioLandscape`.
+**FStashModalConfig** (modal): `bAllowDismiss`, `PhoneWidthRatioPortrait`, `PhoneHeightRatioPortrait`, `PhoneWidthRatioLandscape`, `PhoneHeightRatioLandscape`, `TabletWidthRatioPortrait`, `TabletHeightRatioPortrait`, `TabletWidthRatioLandscape`, `TabletHeightRatioLandscape`, **`BackgroundColor`** (optional hex; empty = default).
+
+**FStashKeepAliveConfig** (Android): `NotificationTitle`, `NotificationText` for the keep-alive notification.
 
 ---
 
@@ -215,7 +241,7 @@ Use the **Stash** category nodes for Open Card, Open Modal, Open Browser, config
 - **Get Stash Subsystem returns null:** Ensure you pass a valid world context (e.g. **Self** from Level Blueprint or an Actor in a running game). In the editor before Play-in-Editor there is no play world, so the subsystem is not available.
 - **Blueprint shows old nodes (Open Checkout, Set Force Web Based Checkout):** The plugin API is **Open Card**, **Open Card With Config**, **Open Browser**, **Close Browser**, **Is Card Open**, **Dismiss Card** (no Open Checkout, no Force Web Based). If you still see old names, do a **clean rebuild**: close the editor, delete the `Intermediate` and `Binaries` folders in your project root, then reopen the `.uproject`. The editor will recompile and Blueprint will show only the new Stash nodes.
 - **iOS – undefined symbol / Library not loaded:** Add WebKit and SafariServices if needed; ensure **StashNative.xcframework** is embedded (Embed & Sign) and present under `Plugins/Stash/Source/Stash/ThirdParty/iOS/`.
-- **Android – class not found / blank card:** Ensure **StashNative** AAR is in `ThirdParty/Android/` (e.g. `StashNative-2.0.0.aar`). Add internet permission. ProGuard: keep `com.stash.**`.
+- **Android – class not found / blank card:** Ensure **StashNative** AAR is in `ThirdParty/Android/` (e.g. `StashNative-2.1.1.aar`). Add internet permission. ProGuard: keep `com.stash.**`.
 - **Xcode: "ExternalBuildToolExecution failed" / "never received target ended message":** The real error is from UnrealBuildTool. Check `~/Library/Application Support/Epic/UnrealBuildTool/Log.txt`. Clear Xcode caches: delete `~/Library/Developer/Xcode/DerivedData`, then regenerate project files and reopen. Alternatively, build from Unreal Editor (open the `.uproject`) or from the command line with the engine's `Build.sh` instead of Xcode.
 
 ---
@@ -250,7 +276,7 @@ UE_ROOT="/path/to/UnrealEngine-4.27"
 
 ## Versioning
 
-This plugin follows semantic versioning (major.minor.patch). Stash Native 2.0+ uses **OpenCard**, **OpenModal**, **OpenBrowser**, and **CloseBrowser**; legacy **OpenCheckout** / **StashPay** naming is no longer used.
+This plugin follows semantic versioning (major.minor.patch). Pair it with **Stash Native 2.1.x** binaries in `ThirdParty` for **backgroundColor**, **onExternalPayment**, and **keep-alive** APIs. Stash Native 2.0+ uses **OpenCard**, **OpenModal**, **OpenBrowser**, and **CloseBrowser**; legacy **OpenCheckout** / **StashPay** naming is no longer used.
 
 ## Support
 

@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Unreal Engine SDK - iOS Wrapper Interface (Stash Native 2.0.0)
+// Stash Unreal Engine SDK - iOS Wrapper Interface (Stash Native 2.1+)
 
 #pragma once
 
@@ -29,7 +29,8 @@ extern "C" {
     tabletWidthRatioPortrait:(float)tabletWidthRatioPortrait
     tabletHeightRatioPortrait:(float)tabletHeightRatioPortrait
     tabletWidthRatioLandscape:(float)tabletWidthRatioLandscape
-    tabletHeightRatioLandscape:(float)tabletHeightRatioLandscape;
+    tabletHeightRatioLandscape:(float)tabletHeightRatioLandscape
+    backgroundColor:(NSString*)backgroundColor;
 - (BOOL)isCardOpen;
 - (BOOL)isPurchaseProcessing;
 - (void)dismissCard;
@@ -38,7 +39,6 @@ extern "C" {
 
 - (void)openModalWithURL:(NSString*)urlString;
 - (void)openModalWithURL:(NSString*)urlString
-              showDragBar:(BOOL)showDragBar
              allowDismiss:(BOOL)allowDismiss
    phoneWidthRatioPortrait:(float)phoneWidthRatioPortrait
   phoneHeightRatioPortrait:(float)phoneHeightRatioPortrait
@@ -47,7 +47,8 @@ extern "C" {
   tabletWidthRatioPortrait:(float)tabletWidthRatioPortrait
  tabletHeightRatioPortrait:(float)tabletHeightRatioPortrait
  tabletWidthRatioLandscape:(float)tabletWidthRatioLandscape
-tabletHeightRatioLandscape:(float)tabletHeightRatioLandscape;
+tabletHeightRatioLandscape:(float)tabletHeightRatioLandscape
+    backgroundColor:(NSString*)backgroundColor;
 
 #pragma mark - Browser
 

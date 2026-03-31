@@ -16,6 +16,24 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashDialogDismissed);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStashOptInResponse, FString, OptInType);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStashPageLoaded, float, LoadTimeMs);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashNetworkError);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStashExternalPayment, FString, URL);
+
+/**
+ * Optional Android-only configuration for the Stash Native keep-alive foreground service (Chrome Custom Tabs / low-memory devices).
+ */
+USTRUCT(BlueprintType)
+struct FStashKeepAliveConfig
+{
+	GENERATED_BODY()
+
+	/** Notification title shown while the user is outside the app. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash")
+	FString NotificationTitle;
+
+	/** Notification body text. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash")
+	FString NotificationText;
+};
 
 /**
  * Configuration for Stash Native card presentation (openCard).
@@ -59,6 +77,10 @@ struct FStashCardConfig
 	/** Tablet height ratio for landscape (0.1-1.0). Default 0.65. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float TabletHeightRatioLandscape = 0.65f;
+
+	/** Optional shell background color as HTML hex (e.g. "#RRGGBB"). Leave empty for SDK default light/dark. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash")
+	FString BackgroundColor;
 };
 
 /**
@@ -70,10 +92,6 @@ USTRUCT(BlueprintType)
 struct FStashModalConfig
 {
 	GENERATED_BODY()
-
-	/** Whether to show drag bar at top of modal. Default true. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash")
-	bool bShowDragBar = true;
 
 	/** Whether tap outside and drag gestures can dismiss the modal. Default true. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash")
@@ -110,6 +128,10 @@ struct FStashModalConfig
 	/** Tablet height ratio for landscape (0.1-1.0). Default 0.8. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
 	float TabletHeightRatioLandscape = 0.8f;
+
+	/** Optional shell background color as HTML hex (e.g. "#RRGGBB"). Leave empty for SDK default light/dark. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash")
+	FString BackgroundColor;
 };
 
 /**
@@ -240,6 +262,18 @@ public:
 	static void SetLandscapeLockWhenCardClosed(bool bEnable);
 
 	/**
+	 * (Android) Enables the Stash Native keep-alive foreground service so the app is less likely to be killed when the user leaves for Chrome Custom Tabs. No effect on iOS.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Set Android Keep Alive Enabled"))
+	static void SetAndroidKeepAliveEnabled(bool bEnabled);
+
+	/**
+	 * (Android) Sets notification title and text for the keep-alive service. Call after Set Android Keep Alive Enabled if needed. No effect on iOS.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Set Android Keep Alive Config"))
+	static void SetAndroidKeepAliveConfig(const FStashKeepAliveConfig& Config);
+
+	/**
 	 * Returns the Stash Subsystem so you can bind to On Payment Success, On Dialog Dismissed, etc. in Blueprint.
 	 * In Blueprint: call "Get Stash Subsystem", then use "Assign [event]" or "Add [event]" on the returned object.
 	 * World context can be a World, Actor, Player Controller, or Game Instance; pass Self from Level Blueprint or an Actor in a running game.
@@ -269,6 +303,9 @@ public:
 
 	/** Called when a network error occurs during initial page load */
 	static FOnStashNetworkError OnNetworkError;
+
+	/** Called when checkout opens an external URL (e.g. Google Pay, Klarna); payment may complete in browser or another app. */
+	static FOnStashExternalPayment OnExternalPayment;
 	
 	// ========================================================================
 	// Internal callback functions called from native code
@@ -279,4 +316,5 @@ public:
 	static void HandleOptInResponse(const FString& OptInType);
 	static void HandlePageLoaded(float LoadTimeMs);
 	static void HandleNetworkError();
+	static void HandleExternalPayment(const FString& URL);
 };

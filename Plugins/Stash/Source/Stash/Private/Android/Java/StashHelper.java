@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Unreal Engine SDK - Android JNI Bridge (Stash Native 2.0.0)
+// Stash Unreal Engine SDK - Android JNI Bridge (Stash Native 2.1+)
 
 package com.Plugins.Stash;
 
@@ -30,6 +30,7 @@ public class StashHelper {
     public static native void nativeOnOptInResponse(String optinType);
     public static native void nativeOnPageLoaded(long loadTimeMs);
     public static native void nativeOnNetworkError();
+    public static native void nativeOnExternalPayment(String url);
 
     /**
      * Initializes the Stash Native SDK with the given activity.
@@ -60,8 +61,9 @@ public class StashHelper {
             card.setActivity(activity);
             card.setListener(new StashNativeCard.StashNativeCardListenerAdapter() {
                 @Override
-                public void onPaymentSuccess() {
-                    Log.d(TAG, "Payment completed successfully");
+                public void onPaymentSuccess(String orderId) {
+                    Log.d(TAG, "Payment completed successfully"
+                            + (orderId != null && !orderId.isEmpty() ? (", orderId=" + orderId) : ""));
                     try {
                         nativeOnPaymentSuccess();
                     } catch (Exception e) {
@@ -116,6 +118,16 @@ public class StashHelper {
                         nativeOnNetworkError();
                     } catch (Exception e) {
                         Log.e(TAG, "Error calling native onNetworkError: " + e.getMessage());
+                    }
+                }
+
+                @Override
+                public void onExternalPayment(String url) {
+                    Log.d(TAG, "External payment URL: " + url);
+                    try {
+                        nativeOnExternalPayment(url != null ? url : "");
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error calling native onExternalPayment: " + e.getMessage());
                     }
                 }
             });
@@ -173,7 +185,8 @@ public class StashHelper {
             boolean forcePortrait,
             float cardHeightRatioPortrait, float cardWidthRatioLandscape, float cardHeightRatioLandscape,
             float tabletWidthRatioPortrait, float tabletHeightRatioPortrait,
-            float tabletWidthRatioLandscape, float tabletHeightRatioLandscape) {
+            float tabletWidthRatioLandscape, float tabletHeightRatioLandscape,
+            String backgroundColor) {
         if (activity == null) {
             Log.e(TAG, "Error: Cannot open card with null activity");
             return;
@@ -197,6 +210,9 @@ public class StashHelper {
                 config.tabletHeightRatioPortrait = tabletHeightRatioPortrait;
                 config.tabletWidthRatioLandscape = tabletWidthRatioLandscape;
                 config.tabletHeightRatioLandscape = tabletHeightRatioLandscape;
+                if (backgroundColor != null && !backgroundColor.isEmpty()) {
+                    config.backgroundColor = backgroundColor;
+                }
                 StashNativeCard.getInstance().openCard(url, config);
             } catch (Exception e) {
                 Log.e(TAG, "Error opening card with config: " + e.getMessage());
@@ -293,11 +309,12 @@ public class StashHelper {
      */
     @Keep
     public static void OpenModalWithConfig(Activity activity, String url,
-            boolean showDragBar, boolean allowDismiss,
+            boolean allowDismiss,
             float phoneWidthPortrait, float phoneHeightPortrait,
             float phoneWidthLandscape, float phoneHeightLandscape,
             float tabletWidthPortrait, float tabletHeightPortrait,
-            float tabletWidthLandscape, float tabletHeightLandscape) {
+            float tabletWidthLandscape, float tabletHeightLandscape,
+            String backgroundColor) {
         if (activity == null) {
             Log.e(TAG, "Error: Cannot open modal with null activity");
             return;
@@ -313,7 +330,6 @@ public class StashHelper {
         activity.runOnUiThread(() -> {
             try {
                 StashNativeCard.ModalConfig config = new StashNativeCard.ModalConfig();
-                config.showDragBar = showDragBar;
                 config.allowDismiss = allowDismiss;
                 config.phoneWidthRatioPortrait = phoneWidthPortrait;
                 config.phoneHeightRatioPortrait = phoneHeightPortrait;
@@ -323,11 +339,47 @@ public class StashHelper {
                 config.tabletHeightRatioPortrait = tabletHeightPortrait;
                 config.tabletWidthRatioLandscape = tabletWidthLandscape;
                 config.tabletHeightRatioLandscape = tabletHeightLandscape;
+                if (backgroundColor != null && !backgroundColor.isEmpty()) {
+                    config.backgroundColor = backgroundColor;
+                }
                 StashNativeCard.getInstance().openModal(url, config);
             } catch (Exception e) {
                 Log.e(TAG, "Error opening modal with config: " + e.getMessage());
             }
         });
+    }
+
+    /**
+     * Enables the foreground keep-alive service (Android low-memory / Chrome Custom Tabs).
+     */
+    @Keep
+    public static void SetKeepAliveEnabled(Activity activity, boolean enabled) {
+        if (activity != null && !isInitialized) {
+            Initialize(activity);
+        }
+        try {
+            StashNativeCard.getInstance().setKeepAliveEnabled(enabled);
+        } catch (Exception e) {
+            Log.e(TAG, "Error setKeepAliveEnabled: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Sets notification title and text for the keep-alive service.
+     */
+    @Keep
+    public static void SetKeepAliveConfig(Activity activity, String notificationTitle, String notificationText) {
+        if (activity != null && !isInitialized) {
+            Initialize(activity);
+        }
+        try {
+            StashNativeCard.KeepAliveConfig cfg = new StashNativeCard.KeepAliveConfig();
+            cfg.notificationTitle = notificationTitle != null ? notificationTitle : "";
+            cfg.notificationText = notificationText != null ? notificationText : "";
+            StashNativeCard.getInstance().setKeepAliveConfig(cfg);
+        } catch (Exception e) {
+            Log.e(TAG, "Error setKeepAliveConfig: " + e.getMessage());
+        }
     }
 
     // ========================================================================
