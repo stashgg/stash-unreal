@@ -16,6 +16,8 @@ extern "C" {
 	void StashNativeOnExternalPayment(const char* url);
 }
 
+static void StashClearForcePortrait(void);
+
 #pragma mark - StashNativeDelegateBridge
 
 /**
@@ -38,6 +40,7 @@ extern "C" {
 
 - (void)stashNativeCardDidDismiss
 {
+	StashClearForcePortrait();
 	StashNativeOnDialogDismissed();
 }
 
@@ -54,11 +57,13 @@ extern "C" {
 
 - (void)stashNativeCardDidEncounterNetworkError
 {
+	StashClearForcePortrait();
 	StashNativeOnNetworkError();
 }
 
 - (void)stashNativeCardDidRequestExternalPaymentWithURL:(NSString*)url
 {
+	StashClearForcePortrait();
 	const char* utf8 = url ? [url UTF8String] : "";
 	if (utf8) StashNativeOnExternalPayment(utf8);
 }
@@ -68,6 +73,7 @@ extern "C" {
 #pragma mark - Landscape Lock (supportedInterfaceOrientations)
 
 static BOOL _landscapeLockWhenCardClosed = NO;
+static BOOL _forcePortraitActive = NO;
 static NSUInteger (*OriginalRootVCSupportedOrientations)(id, SEL) = NULL;
 static NSUInteger (*OriginalDelegateSupportedOrientationsForWindow)(id, SEL, UIApplication*, UIWindow*) = NULL;
 static Class _swizzledRootVCClass = nil;
@@ -101,31 +107,42 @@ static UIWindow* StashMainGameWindow(void)
 	return nil;
 }
 
+static void StashClearForcePortrait(void)
+{
+	if (_forcePortraitActive)
+	{
+		_forcePortraitActive = NO;
+		[UIViewController attemptRotationToDeviceOrientation];
+	}
+}
+
 static NSUInteger StashRootVCSupportedInterfaceOrientations(UIViewController* self, SEL _cmd)
 {
-	if (!_landscapeLockWhenCardClosed)
-	{
-		if (OriginalRootVCSupportedOrientations) return OriginalRootVCSupportedOrientations(self, _cmd);
+	if (_landscapeLockWhenCardClosed)
+		return UIInterfaceOrientationMaskLandscapeLeft | UIInterfaceOrientationMaskLandscapeRight;
+
+	if (_forcePortraitActive)
 		return UIInterfaceOrientationMaskAll;
-	}
-	BOOL cardOpen = [[StashNativeCard sharedInstance] isCurrentlyPresented];
-	UIWindow* w = self.view.window;
-	if (cardOpen && w && w.windowLevel >= UIWindowLevelAlert)
-		return UIInterfaceOrientationMaskAll;
-	return UIInterfaceOrientationMaskLandscapeLeft | UIInterfaceOrientationMaskLandscapeRight;
+
+	if (OriginalRootVCSupportedOrientations) return OriginalRootVCSupportedOrientations(self, _cmd);
+	return UIInterfaceOrientationMaskAll;
 }
 
 static NSUInteger StashDelegateSupportedOrientationsForWindow(id self, SEL _cmd, UIApplication* app, UIWindow* window)
 {
-	if (!_landscapeLockWhenCardClosed)
+	if (_landscapeLockWhenCardClosed)
 	{
-		if (OriginalDelegateSupportedOrientationsForWindow) return OriginalDelegateSupportedOrientationsForWindow(self, _cmd, app, window);
-		return UIInterfaceOrientationMaskAll;
+		if ((_forcePortraitActive || [[StashNativeCard sharedInstance] isCurrentlyPresented])
+			&& window && window.windowLevel >= UIWindowLevelAlert)
+			return UIInterfaceOrientationMaskAll;
+		return UIInterfaceOrientationMaskLandscapeLeft | UIInterfaceOrientationMaskLandscapeRight;
 	}
-	BOOL cardOpen = [[StashNativeCard sharedInstance] isCurrentlyPresented];
-	if (cardOpen && window && window.windowLevel >= UIWindowLevelAlert)
+
+	if (_forcePortraitActive)
 		return UIInterfaceOrientationMaskAll;
-	return UIInterfaceOrientationMaskLandscapeLeft | UIInterfaceOrientationMaskLandscapeRight;
+
+	if (OriginalDelegateSupportedOrientationsForWindow) return OriginalDelegateSupportedOrientationsForWindow(self, _cmd, app, window);
+	return UIInterfaceOrientationMaskAll;
 }
 
 static void InstallAppDelegateOrientationHook(void)
@@ -270,6 +287,12 @@ static StashNativeCardWrapper* _sharedInstance = nil;
 	if (!urlString || urlString.length == 0) return;
 
 	dispatch_async(dispatch_get_main_queue(), ^{
+		if (forcePortrait)
+		{
+			_forcePortraitActive = YES;
+			InstallLandscapeLockHooks();
+			[UIViewController attemptRotationToDeviceOrientation];
+		}
 		StashNativeCardConfig* config = [[StashNativeCardConfig alloc] init];
 		config.forcePortrait = forcePortrait;
 		config.cardHeightRatioPortrait = cardHeightRatioPortrait;
