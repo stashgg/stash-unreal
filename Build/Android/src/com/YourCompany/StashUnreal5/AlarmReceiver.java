@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.YourCompany.StashUnreal4;
+package com.YourCompany.StashUnreal5;
 
 import com.google.android.vending.expansion.downloader.DownloaderClientMarshaller;
 

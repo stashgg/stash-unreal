@@ -1,0 +1,12 @@
+using UnrealBuildTool;
+using System.Collections.Generic;
+
+public class StashUnreal5Target : TargetRules
+{
+    public StashUnreal5Target(TargetInfo Target) : base(Target)
+    {
+        Type = TargetType.Game;
+        DefaultBuildSettings = BuildSettingsVersion.V6;
+        ExtraModuleNames.AddRange(new string[] { "StashUnreal5" });
+    }
+}

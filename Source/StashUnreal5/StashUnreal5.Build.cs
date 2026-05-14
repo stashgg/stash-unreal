@@ -3,9 +3,9 @@
 
 using UnrealBuildTool;
 
-public class StashUnreal4 : ModuleRules
+public class StashUnreal5 : ModuleRules
 {
-    public StashUnreal4(ReadOnlyTargetRules Target) : base(Target)
+    public StashUnreal5(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 

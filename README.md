@@ -17,7 +17,7 @@ Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash
 
 ## Sample / Downloads
 
-- **Run the sample:** Clone this repo and open `StashUnreal4.uproject` in Unreal Engine 4.27+.
+- **Run the sample:** Clone this repo and open `StashUnreal5.uproject` in Unreal Engine 4.27+.
 - **Use in your project:** Copy the `Plugins/Stash/` folder into your project’s `Plugins/` directory and enable the plugin under **Edit → Plugins → Mobile → Stash**.
 
 ## Quick Start
@@ -259,7 +259,7 @@ Use the **Stash** category nodes for Open Card, Open Modal, Open Browser, config
 
 ## Rebuilding the project
 
-**Option A:** Open `StashUnreal4.uproject` in Unreal Editor; the editor will compile the plugin.
+**Option A:** Open `StashUnreal5.uproject` in Unreal Editor; the editor will compile the plugin.
 
 **Option B:** Regenerate project files from the engine, then open the generated solution/workspace or the `.uproject`:
 
@@ -267,13 +267,13 @@ Use the **Stash** category nodes for Open Card, Open Modal, Open Browser, config
 
 ```bash
 UE_ROOT="/path/to/UnrealEngine-4.27"
-"$UE_ROOT/Engine/Build/BatchFiles/Mac/GenerateProjectFiles.sh" -project="$(pwd)/StashUnreal4.uproject" -game
+"$UE_ROOT/Engine/Build/BatchFiles/Mac/GenerateProjectFiles.sh" -project="$(pwd)/StashUnreal5.uproject" -game
 ```
 
 **Windows:**
 
 ```bat
-"C:\Path\To\UnrealEngine\Engine\Build\BatchFiles\GenerateProjectFiles.bat" "C:\Path\To\stash-unreal-4\StashUnreal4.uproject" -game
+"C:\Path\To\UnrealEngine\Engine\Build\BatchFiles\GenerateProjectFiles.bat" "C:\Path\To\stash-unreal\StashUnreal5.uproject" -game
 ```
 
 **Clean rebuild:** Remove `Binaries`, `Intermediate`, `Saved/StagedBuilds`, then reopen the project.

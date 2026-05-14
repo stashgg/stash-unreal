@@ -10,8 +10,7 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
   <!-- Initializing XML variables  ============================================================================= -->
   <init>
     <log text="Stash Android -> Adding properties to Manifest and Gradle"/>
-    <trace enable="true"/>
-    
+
     <dumpvars/>
     
     <setBool result="bSupported" value="false"/>
@@ -136,7 +135,7 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
     <insert>
       ext {
         android {
-          compileSdkVersion 34
+          compileSdkVersion 35
           buildTypes {
             release {
               minifyEnabled false

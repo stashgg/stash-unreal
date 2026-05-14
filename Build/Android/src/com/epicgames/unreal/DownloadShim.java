@@ -1,10 +1,10 @@
-package com.epicgames.ue4;
+package com.epicgames.unreal;
 
-import com.YourCompany.StashUnreal4.OBBDownloaderService;
-import com.YourCompany.StashUnreal4.DownloaderActivity;
+import com.YourCompany.StashUnreal5.OBBDownloaderService;
+import com.YourCompany.StashUnreal5.DownloaderActivity;
 import android.app.Activity;
 import com.google.android.vending.expansion.downloader.Helpers;
-import com.YourCompany.StashUnreal4.OBBData;
+import com.YourCompany.StashUnreal5.OBBData;
 
 
 public class DownloadShim

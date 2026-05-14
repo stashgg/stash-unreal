@@ -1,11 +1,11 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "{F5A9034C-4846-AEDB-6040-2E9BFE8C7F62}",
+	"EngineAssociation": "5.7",
 	"Category": "",
 	"Description": "Stash Pay Checkout Demo - A simple Unreal Engine project demonstrating Stash Pay native checkout integration on iOS and Android.",
 	"Modules": [
 		{
-			"Name": "StashUnreal4",
+			"Name": "StashUnreal5",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		}

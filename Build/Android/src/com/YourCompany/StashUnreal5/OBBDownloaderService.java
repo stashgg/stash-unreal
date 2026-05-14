@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.YourCompany.StashUnreal4;
+package com.YourCompany.StashUnreal5;
 
 import com.google.android.vending.expansion.downloader.impl.DownloaderService;
 
@@ -61,6 +61,6 @@ public class OBBDownloaderService extends DownloaderService {
      */
     @Override
     public String getAlarmReceiverClassName() {
-        return com.YourCompany.StashUnreal4.AlarmReceiver.class.getName();
+        return com.YourCompany.StashUnreal5.AlarmReceiver.class.getName();
     }
 }

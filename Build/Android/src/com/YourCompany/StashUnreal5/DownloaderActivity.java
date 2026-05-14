@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.YourCompany.StashUnreal4;
+package com.YourCompany.StashUnreal5;
 
 import com.android.vending.expansion.zipfile.ZipResourceFile;
 import com.android.vending.expansion.zipfile.ZipResourceFile.ZipEntryRO;
@@ -59,7 +59,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
 
-import com.epicgames.ue4.GameActivity;
+import com.epicgames.unreal.GameActivity;
 
 /**
  * This is sample code for a project built against the downloader library. It
@@ -601,8 +601,7 @@ public class DownloaderActivity extends Activity implements IDownloaderClient {
 					PendingIntent pendingIntent = PendingIntent.getActivity(
 							DownloaderActivity.this,
 							0, intentToLaunchThisActivityFromNotification,
-							PendingIntent.FLAG_UPDATE_CURRENT |
-							(android.os.Build.VERSION.SDK_INT >= 26 ? PendingIntent.FLAG_IMMUTABLE : 0));
+							PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 					// Request to start the download
 					int startResult = DownloaderClientMarshaller.startDownloadServiceIfRequired(this,
 							pendingIntent, OBBDownloaderService.class);
