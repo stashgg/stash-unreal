@@ -30,7 +30,7 @@ Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash
 ### Folder structure
 
 - **Plugins/Stash/** – Plugin root: `Source/Stash` (module), `ThirdParty` (StashNative AAR + XCFramework), `Resources`.
-- **StashBlueprint** – Blueprint function library: `OpenCard`, `OpenModal`, `OpenBrowser`, `CloseBrowser`, config structs, delegates.
+- **StashBlueprint** – Blueprint function library: `OpenCard`, `OpenModal`, `OpenBrowser`, `CloseBrowser`, `SetAndroidCheckoutBackdropBytes`, `ClearAndroidCheckoutBackdrop`, `CaptureViewportForAndroidCheckoutBackdrop`, config structs, delegates.
 - **Key files:** `StashBlueprint.h`, iOS wrapper `StashNativeCardWrapper` (ObjC), Android `StashHelper.java`, ThirdParty StashNative binaries.
 
 ## Usage
@@ -38,6 +38,8 @@ Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash
 Stash Native presents Stash Pay and webshop links in three ways: **openCard** (drawer/card), **openModal** (centered modal), and **openBrowser** (system browser). Checkout URLs must be generated on your backend; see the [Stash Pay Integration Guide](https://docs.stash.gg/guides/stash-pay/integration).
 
 **iOS note:** The first OpenCard/OpenModal call can be slow under the Xcode debugger (WKWebView); production builds are unaffected.
+
+**Android checkout backdrop (landscape → portrait):** The OS may still **animate** rotation when checkout forces portrait; stash-native shows your capture **behind the dim overlay** (not a frozen game swapchain). Prefer: **Capture Viewport For Android Checkout Backdrop** (JPEG, end-of-frame), assign bytes to **Android Checkout Backdrop** on your **Stash Card Config**, then **Open Card With Config** so backdrop and `openCard` run in one UI-thread step. Alternatively call **Set Android Checkout Backdrop Bytes** immediately before open (same thread order as Unity’s `WaitForEndOfFrame` → `setBackdropBytes` → `OpenCard`). Match Unity’s README: consider locking **screen orientation** while the card is open. Requires **StashNative-2.1.4+** AAR (`Stash_UPL_Android.xml` `gradleCopies`).
 
 ---
 
@@ -59,8 +61,10 @@ FStashCardConfig Config = UStashBlueprint::MakeStashCardConfig(
     0.68f,   // CardHeightRatioPortrait
     0.9f,    // CardWidthRatioLandscape
     0.6f,    // CardHeightRatioLandscape
-    0.6f, 0.8f, 0.8f, 0.65f  // tablet ratios
+    0.6f, 0.8f, 0.8f, 0.65f,  // tablet ratios
+    FString() // BackgroundColor (HTML hex)
 );
+// Config.AndroidCheckoutBackdrop = captured JPEG bytes before OpenCardWithConfig
 UStashBlueprint::OpenCardWithConfig(CheckoutURL, Config);
 ```
 
@@ -231,7 +235,7 @@ if (UStashSubsystem* Stash = UStashBlueprint::GetStashSubsystem(this))
 
 ### Config types
 
-**FStashCardConfig** (card): `bForcePortrait`, `CardHeightRatioPortrait`, `CardWidthRatioLandscape`, `CardHeightRatioLandscape`, `TabletWidthRatioPortrait`, `TabletHeightRatioPortrait`, `TabletWidthRatioLandscape`, `TabletHeightRatioLandscape`, **`BackgroundColor`** (optional HTML hex, e.g. `#RRGGBB`; leave empty for SDK default—see [stash-native](https://github.com/stashgg/stash-native/blob/main/README.md)).
+**FStashCardConfig** (card): `bForcePortrait`, `CardHeightRatioPortrait`, `CardWidthRatioLandscape`, `CardHeightRatioLandscape`, `TabletWidthRatioPortrait`, `TabletHeightRatioPortrait`, `TabletWidthRatioLandscape`, `TabletHeightRatioLandscape`, **`BackgroundColor`** (optional HTML hex, e.g. `#RRGGBB`; leave empty for SDK default—see [stash-native](https://github.com/stashgg/stash-native/blob/main/README.md)), **`AndroidCheckoutBackdrop`** (Android, optional JPEG/PNG bytes for force-portrait checkout backdrop).
 
 **FStashModalConfig** (modal): `bAllowDismiss`, `PhoneWidthRatioPortrait`, `PhoneHeightRatioPortrait`, `PhoneWidthRatioLandscape`, `PhoneHeightRatioLandscape`, `TabletWidthRatioPortrait`, `TabletHeightRatioPortrait`, `TabletWidthRatioLandscape`, `TabletHeightRatioLandscape`, **`BackgroundColor`** (optional hex; empty = default).
 
@@ -250,7 +254,9 @@ Use the **Stash** category nodes for Open Card, Open Modal, Open Browser, config
 - **Get Stash Subsystem returns null:** Ensure you pass a valid world context (e.g. **Self** from Level Blueprint or an Actor in a running game). In the editor before Play-in-Editor there is no play world, so the subsystem is not available.
 - **Blueprint shows old nodes (Open Checkout, Set Force Web Based Checkout):** The plugin API is **Open Card**, **Open Card With Config**, **Open Browser**, **Close Browser**, **Is Card Open**, **Dismiss Card** (no Open Checkout, no Force Web Based). If you still see old names, do a **clean rebuild**: close the editor, delete the `Intermediate` and `Binaries` folders in your project root, then reopen the `.uproject`. The editor will recompile and Blueprint will show only the new Stash nodes.
 - **iOS – undefined symbol / Library not loaded:** Add WebKit and SafariServices if needed; ensure **StashNative.xcframework** is embedded (Embed & Sign) and present under `Plugins/Stash/Source/Stash/ThirdParty/iOS/`.
-- **Android – class not found / blank card:** Ensure **StashNative** AAR is in `ThirdParty/Android/` (e.g. `StashNative-2.1.1.aar`). Add internet permission. ProGuard: keep `com.stash.**`.
+- **Android – class not found / blank card:** Ensure **StashNative** AAR is in `ThirdParty/Android/` (e.g. `StashNative-2.1.4.aar`; the filename must match `Stash_UPL_Android.xml` → `gradleCopies`). Add internet permission. ProGuard: keep `com.stash.**`.
+- **Android – checkout backdrop has no effect:** Use a Stash Native Android AAR that includes `setBackdropBytes(byte[])` on `StashNativeCard` (2.1.4+ in this repo). Confirm call order: set bytes (or capture delegate) **before** Open Card. If you replace the AAR with another build, update the `gradleCopies` `copyFile` `src` path to that filename.
+- **Blueprint – "Only exactly matching structures" between Make Stash Card Config and Open Card With Config:** Usually a **stale graph** after the `FStashCardConfig` struct changed. **Close the editor**, rebuild the **Stash** plugin (or full project), reopen, then **delete** the **Make Stash Card Config** and **Open Card With Config** nodes and place them again from the **Stash** category (or use **Refresh All Nodes** on the Blueprint). Ensure you are not mixing a **User-defined struct** with the same display name as the plugin’s **Stash Card Config**; the shell color pin must be **String** (HTML hex like `#RRGGBB`), not Linear Color.
 - **Android – crash on Open Browser with keep-alive:** `NoSuchMethodError` on `ServiceCompat.startForeground(Service, int, Notification, int)` means **`androidx.core` is too old** in the packaged APK. Ensure `Stash_UPL_Android.xml` still includes **`implementation 'androidx.core:core:1.13.1'`** (or newer); see the **Android keep-alive service** section above.
 - **Android – Gradle `checkDebugDuplicateClasses` (Kotlin):** Duplicate classes in `kotlin-stdlib` vs `kotlin-stdlib-jdk7` / `kotlin-stdlib-jdk8` usually means mixed Kotlin versions. The plugin’s UPL should force **`org.jetbrains.kotlin` to 1.8.22**; if you still see this after merging other Gradle snippets, align or exclude conflicting Kotlin artifacts.
 - **Xcode: "ExternalBuildToolExecution failed" / "never received target ended message":** The real error is from UnrealBuildTool. Check `~/Library/Application Support/Epic/UnrealBuildTool/Log.txt`. Clear Xcode caches: delete `~/Library/Developer/Xcode/DerivedData`, then regenerate project files and reopen. Alternatively, build from Unreal Editor (open the `.uproject`) or from the command line with the engine's `Build.sh` instead of Xcode.

@@ -33,10 +33,13 @@ public class Stash : ModuleRules
 		// Android platform configuration
 		if (Target.Platform == UnrealTargetPlatform.Android)
 		{
-			// Required for JNI
+			// Required for JNI; ImageWrapper + RenderCore for checkout viewport capture (PNG)
 			PrivateDependencyModuleNames.AddRange(new string[]
 			{
-				"Launch"
+				"Launch",
+				"ImageWrapper",
+				"RHI",
+				"RenderCore",
 			});
 
 			PrivateIncludePaths.AddRange(new string[] { Path.Combine(ModuleDirectory, "Private", "Android") });

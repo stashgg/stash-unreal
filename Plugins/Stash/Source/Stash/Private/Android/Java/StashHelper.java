@@ -4,6 +4,10 @@
 package com.Plugins.Stash;
 
 import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import androidx.annotation.Keep;
 
@@ -18,8 +22,11 @@ import com.stash.stashnative.StashNativeCard;
 @Keep
 public class StashHelper {
     private static final String TAG = "StashHelper";
+    /** Filter logcat: adb logcat -s StashHelper:I *:S | grep StashBackdrop */
+    private static final String BTAG = "[StashBackdrop]";
     private static volatile boolean isInitialized = false;
     private static final Object initLock = new Object();
+    private static final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     /**
      * Native C++ callback methods (implemented in StashBlueprint.cpp)
@@ -84,11 +91,14 @@ public class StashHelper {
                 @Override
                 public void onDialogDismissed() {
                     Log.d(TAG, "Card/modal dismissed");
+                    Log.i(TAG, BTAG + " onDialogDismissed → scheduling clearCheckoutBackdropInternal (thread="
+                            + Thread.currentThread().getName() + ")");
                     try {
                         nativeOnDialogDismissed();
                     } catch (Exception e) {
                         Log.e(TAG, "Error calling native onDialogDismissed: " + e.getMessage());
                     }
+                    runOnMainThread(StashHelper::clearCheckoutBackdropInternal);
                 }
 
                 @Override
@@ -134,6 +144,11 @@ public class StashHelper {
 
             isInitialized = true;
             Log.d(TAG, "StashHelper initialized successfully");
+            try {
+                Log.i(TAG, BTAG + " StashNativeCard SDK version: " + StashNativeCard.getVersion());
+            } catch (Exception e) {
+                Log.w(TAG, BTAG + " Could not read StashNativeCard.getVersion(): " + e.getMessage());
+            }
         }
     }
 
@@ -179,6 +194,8 @@ public class StashHelper {
      * @param tabletHeightRatioPortrait Tablet height ratio portrait (0.1-1.0)
      * @param tabletWidthRatioLandscape Tablet width ratio landscape (0.1-1.0)
      * @param tabletHeightRatioLandscape Tablet height ratio landscape (0.1-1.0)
+     * @param backgroundColor optional shell color
+     * @param backdropOptional optional PNG/JPEG; applied on this UI runnable immediately before openCard (Android force-portrait)
      */
     @Keep
     public static void OpenCardWithConfig(Activity activity, String url,
@@ -186,7 +203,8 @@ public class StashHelper {
             float cardHeightRatioPortrait, float cardWidthRatioLandscape, float cardHeightRatioLandscape,
             float tabletWidthRatioPortrait, float tabletHeightRatioPortrait,
             float tabletWidthRatioLandscape, float tabletHeightRatioLandscape,
-            String backgroundColor) {
+            String backgroundColor,
+            byte[] backdropOptional) {
         if (activity == null) {
             Log.e(TAG, "Error: Cannot open card with null activity");
             return;
@@ -198,9 +216,18 @@ public class StashHelper {
         if (!isInitialized) {
             Initialize(activity);
         }
-        Log.d(TAG, "Opening card with config: " + url);
+        final int backdropLen = backdropOptional != null ? backdropOptional.length : 0;
+        Log.i(TAG, BTAG + " OpenCardWithConfig enqueue urlLen=" + (url != null ? url.length() : 0)
+                + " forcePortrait=" + forcePortrait + " backdropBytes=" + backdropLen
+                + " thread=" + Thread.currentThread().getName());
         activity.runOnUiThread(() -> {
             try {
+                Log.i(TAG, BTAG + " OpenCardWithConfig UI runnable start thread=" + Thread.currentThread().getName());
+                if (backdropOptional != null && backdropOptional.length > 0) {
+                    applyDecodedBackdropOrLog(backdropOptional);
+                } else {
+                    Log.i(TAG, BTAG + " OpenCardWithConfig: no backdrop bytes on config (skipping setBackdrop)");
+                }
                 StashNativeCard.CardConfig config = new StashNativeCard.CardConfig();
                 config.forcePortrait = forcePortrait;
                 config.cardHeightRatioPortrait = cardHeightRatioPortrait;
@@ -214,8 +241,9 @@ public class StashHelper {
                     config.backgroundColor = backgroundColor;
                 }
                 StashNativeCard.getInstance().openCard(url, config);
+                Log.i(TAG, BTAG + " openCard() returned (config.forcePortrait=" + config.forcePortrait + ")");
             } catch (Exception e) {
-                Log.e(TAG, "Error opening card with config: " + e.getMessage());
+                Log.e(TAG, BTAG + " Error opening card with config: " + e.getMessage(), e);
             }
         });
     }
@@ -268,7 +296,114 @@ public class StashHelper {
             } catch (Exception e) {
                 Log.e(TAG, "Error dismissing card: " + e.getMessage());
             }
+            Log.i(TAG, BTAG + " DismissCard → clearCheckoutBackdropInternal");
+            clearCheckoutBackdropInternal();
         });
+    }
+
+    // ========================================================================
+    // Checkout backdrop (Android landscape → portrait; Stash Native 2.1.4+ setBackdropBytes)
+    // ========================================================================
+
+    private static void runOnMainThread(Runnable r) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            r.run();
+        } else {
+            mainHandler.post(r);
+        }
+    }
+
+    private static void clearCheckoutBackdropInternal() {
+        Log.i(TAG, BTAG + " clearCheckoutBackdropInternal thread=" + Thread.currentThread().getName());
+        try {
+            StashNativeCard.setBackdropBitmap(null);
+            Log.i(TAG, BTAG + " setBackdropBitmap(null) OK");
+        } catch (Exception e) {
+            Log.e(TAG, BTAG + " Error clearing checkout backdrop: " + e.getMessage(), e);
+        }
+    }
+
+    private static String hexHead(byte[] data, int max) {
+        if (data == null || data.length == 0) {
+            return "<empty>";
+        }
+        int n = Math.min(max, data.length);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            sb.append(String.format("%02X", data[i] & 0xff));
+            if (i + 1 < n) {
+                sb.append(' ');
+            }
+        }
+        if (data.length > n) {
+            sb.append("…(total ").append(data.length).append(" bytes)");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Decodes PNG/JPEG and forwards to {@link StashNativeCard#setBackdropBitmap}; logs if decode fails.
+     */
+    private static void applyDecodedBackdropOrLog(byte[] imageBytes) {
+        final int len = imageBytes != null ? imageBytes.length : 0;
+        Log.i(TAG, BTAG + " applyDecodedBackdropOrLog inputBytes=" + len + " head=" + hexHead(imageBytes, 8));
+        Bitmap bmp = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+        if (bmp == null) {
+            Log.e(TAG, BTAG + " BitmapFactory.decodeByteArray returned null (not valid PNG/JPEG?)");
+            return;
+        }
+        Log.i(TAG, BTAG + " decoded bitmap " + bmp.getWidth() + "x" + bmp.getHeight()
+                + " config=" + bmp.getConfig());
+        StashNativeCard.setBackdropBitmap(bmp);
+        Log.i(TAG, BTAG + " setBackdropBitmap OK");
+    }
+
+    /**
+     * Sets image bytes (typically PNG or JPEG) shown behind the checkout shell during orientation transitions.
+     * Call before OpenCard / OpenModal; cleared automatically on dismiss or via {@link #ClearCheckoutBackdrop}.
+     *
+     * @param activity   Game activity
+     * @param imageBytes Encoded image bytes, or null / empty to clear
+     */
+    @Keep
+    public static void SetCheckoutBackdropBytes(Activity activity, byte[] imageBytes) {
+        final int len = imageBytes != null ? imageBytes.length : 0;
+        Log.i(TAG, BTAG + " SetCheckoutBackdropBytes called bytes=" + len + " thread=" + Thread.currentThread().getName());
+        if (activity == null) {
+            Log.e(TAG, BTAG + " SetCheckoutBackdropBytes: null activity");
+            return;
+        }
+        if (!isInitialized) {
+            Initialize(activity);
+        }
+        activity.runOnUiThread(() -> {
+            Log.i(TAG, BTAG + " SetCheckoutBackdropBytes UI runnable thread=" + Thread.currentThread().getName());
+            try {
+                if (imageBytes == null || imageBytes.length == 0) {
+                    clearCheckoutBackdropInternal();
+                } else {
+                    applyDecodedBackdropOrLog(imageBytes);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, BTAG + " Error setting checkout backdrop: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    /**
+     * Clears any checkout backdrop set via {@link #SetCheckoutBackdropBytes}; safe to call repeatedly.
+     */
+    @Keep
+    public static void ClearCheckoutBackdrop(Activity activity) {
+        Log.i(TAG, BTAG + " ClearCheckoutBackdrop called thread=" + Thread.currentThread().getName());
+        if (activity == null) {
+            Log.e(TAG, BTAG + " ClearCheckoutBackdrop: null activity");
+            return;
+        }
+        if (!isInitialized) {
+            Initialize(activity);
+        }
+        activity.runOnUiThread(StashHelper::clearCheckoutBackdropInternal);
     }
 
     // ========================================================================

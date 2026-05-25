@@ -8,6 +8,7 @@
 #include "StashBlueprint.generated.h"
 
 class UStashSubsystem;
+struct FLatentActionInfo;
 
 // Stash payment and lifecycle callbacks
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashPaymentSuccess);
@@ -17,6 +18,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStashOptInResponse, FString, OptI
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStashPageLoaded, float, LoadTimeMs);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashNetworkError);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStashExternalPayment, FString, URL);
+
+/** Fired after end-of-frame viewport read; JPEG bytes suitable for Android checkout backdrop (assign to Card Config or Set Android Checkout Backdrop Bytes). */
+DECLARE_DYNAMIC_DELEGATE_OneParam(FOnStashViewportCaptureComplete, TArray<uint8>, ImageBytes);
 
 /**
  * Optional Android-only configuration for the Stash Native keep-alive foreground service (Chrome Custom Tabs / low-memory devices).
@@ -81,6 +85,14 @@ struct FStashCardConfig
 	/** Optional shell background color as HTML hex (e.g. "#RRGGBB"). Leave empty for SDK default light/dark. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash")
 	FString BackgroundColor;
+
+	/**
+	 * Android only: optional PNG or JPEG bytes shown behind the dim overlay during force-portrait checkout
+	 * (stash-native `setBackdropBitmap`). When non-empty, Open Card With Config applies this on the UI thread
+	 * immediately before `openCard` in the same runnable (preferred over separate Set + Open calls).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash")
+	TArray<uint8> AndroidCheckoutBackdrop;
 };
 
 /**
@@ -159,6 +171,8 @@ public:
 	 * @param TabletHeightRatioPortrait Tablet height in portrait (0.1-1.0).
 	 * @param TabletWidthRatioLandscape Tablet width in landscape (0.1-1.0).
 	 * @param TabletHeightRatioLandscape Tablet height in landscape (0.1-1.0).
+	 * @param BackgroundColor Optional HTML hex shell color (e.g. "#RRGGBB"); leave empty for SDK default.
+	 * Assign **Android Checkout Backdrop** (byte array) on the returned struct in Blueprint (Set members / Break-Make) after viewport capture.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Make Stash Card Config"))
 	static FStashCardConfig MakeStashCardConfig(
@@ -169,7 +183,8 @@ public:
 		float TabletWidthRatioPortrait = 0.6f,
 		float TabletHeightRatioPortrait = 0.8f,
 		float TabletWidthRatioLandscape = 0.8f,
-		float TabletHeightRatioLandscape = 0.65f
+		float TabletHeightRatioLandscape = 0.65f,
+		FString BackgroundColor = TEXT("")
 	);
 
 	/**
@@ -272,6 +287,36 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Set Android Keep Alive Config"))
 	static void SetAndroidKeepAliveConfig(const FStashKeepAliveConfig& Config);
+
+	/**
+	 * (Android) Passes encoded image bytes (PNG or JPEG) to Stash Native before Open Card / Open Modal to reduce flash during
+	 * landscape-to-portrait transitions. Uses stash-native `setBackdropBitmap` (decoded PNG/JPEG). Cleared automatically when the card is dismissed; you may also call Clear Android Checkout Backdrop. Prefer filling **Android Checkout Backdrop** on **Stash Card Config** so open runs in one UI step with **Open Card With Config**. No effect on iOS or other platforms.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Set Android Checkout Backdrop Bytes"))
+	static void SetAndroidCheckoutBackdropBytes(const TArray<uint8>& ImageBytes);
+
+	/**
+	 * (Android) Clears any checkout backdrop set via Set Android Checkout Backdrop Bytes. No effect on iOS or other platforms.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Clear Android Checkout Backdrop"))
+	static void ClearAndroidCheckoutBackdrop();
+
+	/**
+	 * (Android) Captures the game viewport after the current frame finishes rendering, compresses to JPEG, and returns bytes via the delegate.
+	 * Prefer **Capture Viewport For Android Checkout Backdrop (Latent)** in Widget Blueprints (white exec chain, no delegate binding).
+	 *
+	 * @param WorldContextObject World, Actor, Player Controller, or Game Instance used to schedule the capture
+	 * @param OnComplete Called on the game thread with JPEG bytes or an empty array on failure
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Capture Viewport For Android Checkout Backdrop (Delegate)", WorldContext = "WorldContextObject"))
+	static void CaptureViewportForAndroidCheckoutBackdrop(UObject* WorldContextObject, FOnStashViewportCaptureComplete OnComplete);
+
+	/**
+	 * (Android) Same capture as the delegate version; use the white **Completed** exec pin and **Out Image Bytes** in Blueprint.
+	 * Wire Completed → Set members (Android Checkout Backdrop) → Open Card With Config.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Capture Viewport For Android Checkout Backdrop", WorldContext = "WorldContextObject", Latent, LatentInfo = "LatentInfo"))
+	static void CaptureViewportForAndroidCheckoutBackdropLatent(UObject* WorldContextObject, TArray<uint8>& OutImageBytes, FLatentActionInfo LatentInfo);
 
 	/**
 	 * Returns the Stash Subsystem so you can bind to On Payment Success, On Dialog Dismissed, etc. in Blueprint.

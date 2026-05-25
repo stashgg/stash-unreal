@@ -10,9 +10,19 @@
 #include "Engine/GameInstance.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/PlayerController.h"
+#include "LatentActions.h"
+#include "TimerManager.h"
 
 #if PLATFORM_ANDROID
 #include "Android/Utils/AndroidUtils.h"
+#include "Engine/GameViewportClient.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
+#include "Modules/ModuleManager.h"
+#include "RHI.h"
+#include "RHICommandList.h"
+#include "RenderingThread.h"
+#include "Slate/SceneViewport.h"
 #endif
 
 #if PLATFORM_IOS
@@ -37,10 +47,12 @@ FStashCardConfig UStashBlueprint::MakeStashCardConfig(
 	float TabletWidthRatioPortrait,
 	float TabletHeightRatioPortrait,
 	float TabletWidthRatioLandscape,
-	float TabletHeightRatioLandscape)
+	float TabletHeightRatioLandscape,
+	FString BackgroundColor)
 {
 	FStashCardConfig Config;
 	Config.bForcePortrait = bForcePortrait;
+	Config.BackgroundColor = MoveTemp(BackgroundColor);
 	Config.CardHeightRatioPortrait = FMath::Clamp(CardHeightRatioPortrait, 0.1f, 1.0f);
 	Config.CardWidthRatioLandscape = FMath::Clamp(CardWidthRatioLandscape, 0.1f, 1.0f);
 	Config.CardHeightRatioLandscape = FMath::Clamp(CardHeightRatioLandscape, 0.1f, 1.0f);
@@ -98,6 +110,9 @@ void UStashBlueprint::OpenCardWithConfig(const FString& URL, const FStashCardCon
 		backgroundColor:bgColor];
 #elif PLATFORM_ANDROID
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card with config on Android: %s"), *URL);
+	const int32 BackdropLen = Config.AndroidCheckoutBackdrop.Num();
+	UE_LOG(LogStash, Log, TEXT("[StashBackdrop] OpenCardWithConfig: forcePortrait=%d backdropBytes=%d"),
+		Config.bForcePortrait ? 1 : 0, BackdropLen);
 	AndroidUtils::CallJavaCode<void>(
 		"com/Plugins/Stash/StashHelper",
 		"OpenCardWithConfig",
@@ -112,7 +127,8 @@ void UStashBlueprint::OpenCardWithConfig(const FString& URL, const FStashCardCon
 		FMath::Clamp(Config.TabletHeightRatioPortrait, 0.1f, 1.0f),
 		FMath::Clamp(Config.TabletWidthRatioLandscape, 0.1f, 1.0f),
 		FMath::Clamp(Config.TabletHeightRatioLandscape, 0.1f, 1.0f),
-		Config.BackgroundColor
+		Config.BackgroundColor,
+		Config.AndroidCheckoutBackdrop
 	);
 #else
 	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenCardWithConfig called on unsupported platform"));
@@ -320,6 +336,294 @@ void UStashBlueprint::SetAndroidKeepAliveConfig(const FStashKeepAliveConfig& Con
 #else
 	UE_LOG(LogStash, Log, TEXT("[Stash] SetAndroidKeepAliveConfig: no-op on this platform"));
 #endif
+}
+
+void UStashBlueprint::SetAndroidCheckoutBackdropBytes(const TArray<uint8>& ImageBytes)
+{
+#if PLATFORM_ANDROID
+	if (!AndroidUtils::isSupportPlatform())
+	{
+		UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] SetAndroidCheckoutBackdropBytes: AndroidUtils platform not ready (JNI init failed?)"));
+		return;
+	}
+	UE_LOG(LogStash, Log, TEXT("[StashBackdrop] SetAndroidCheckoutBackdropBytes: forwarding %d bytes to Java"), ImageBytes.Num());
+	AndroidUtils::CallJavaCode<void>(
+		"com/Plugins/Stash/StashHelper",
+		"SetCheckoutBackdropBytes",
+		"",
+		true,
+		ImageBytes
+	);
+#else
+	(void)ImageBytes;
+#endif
+}
+
+void UStashBlueprint::ClearAndroidCheckoutBackdrop()
+{
+#if PLATFORM_ANDROID
+	if (!AndroidUtils::isSupportPlatform())
+	{
+		UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] ClearAndroidCheckoutBackdrop: AndroidUtils platform not ready"));
+		return;
+	}
+	UE_LOG(LogStash, Log, TEXT("[StashBackdrop] ClearAndroidCheckoutBackdrop → Java"));
+	AndroidUtils::CallJavaCode<void>(
+		"com/Plugins/Stash/StashHelper",
+		"ClearCheckoutBackdrop",
+		"",
+		true
+	);
+#endif
+}
+
+namespace
+{
+#if PLATFORM_ANDROID
+	static constexpr int32 StashBackdropMaxCaptureAttempts = 15;
+
+	struct FStashCaptureRetryState
+	{
+		TWeakObjectPtr<UWorld> WeakWorld;
+		TFunction<void(TArray<uint8>)> OnDone;
+		int32 AttemptIndex = 0;
+	};
+
+	static void ScheduleViewportCaptureAttempt(TSharedRef<FStashCaptureRetryState> State);
+#endif
+
+	static TArray<uint8> EncodeViewportBitmapToJpeg(const TArray<FColor>& Bitmap, const FIntPoint& Size)
+	{
+		TArray<uint8> OutBytes;
+		if (Bitmap.Num() == 0 || Size.X <= 0 || Size.Y <= 0)
+		{
+			return OutBytes;
+		}
+		IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+		TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::JPEG);
+		if (!ImageWrapper.IsValid() || !ImageWrapper->SetRaw(Bitmap.GetData(), Bitmap.Num() * sizeof(FColor), Size.X, Size.Y, ERGBFormat::BGRA, 8))
+		{
+			UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: JPEG wrap failed (bitmap pixels=%d)"), Bitmap.Num());
+			return OutBytes;
+		}
+		const TArray64<uint8>& Compressed = ImageWrapper->GetCompressed(85);
+		OutBytes.Append(Compressed.GetData(), static_cast<int32>(Compressed.Num()));
+		return OutBytes;
+	}
+
+	/** Read back the game viewport on the render thread (safe for Android Vulkan). Callback runs on game thread. */
+	static void CaptureViewportToJpegBytesAsync(TFunction<void(TArray<uint8>&&)> OnComplete, int32 AttemptIndex)
+	{
+#if PLATFORM_ANDROID
+		if (!IsInGameThread())
+		{
+			UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: must run on game thread"));
+			OnComplete(TArray<uint8>());
+			return;
+		}
+		if (!GEngine || !GEngine->GameViewport || !GEngine->GameViewport->Viewport)
+		{
+			UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: no GameViewport"));
+			OnComplete(TArray<uint8>());
+			return;
+		}
+		FSceneViewport* SceneViewport = static_cast<FSceneViewport*>(GEngine->GameViewport->Viewport);
+		const FIntPoint Size = SceneViewport->GetSizeXY();
+		if (Size.X <= 0 || Size.Y <= 0)
+		{
+			UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: bad viewport size %dx%d"), Size.X, Size.Y);
+			OnComplete(TArray<uint8>());
+			return;
+		}
+
+		const FViewportRHIRef ViewportRHIRef = SceneViewport->GetViewportRHI();
+
+		struct FStashBackdropCaptureState
+		{
+			FIntPoint Size = FIntPoint::ZeroValue;
+			int32 AttemptIndex = 0;
+			TFunction<void(TArray<uint8>&&)> OnComplete;
+		};
+		TSharedRef<FStashBackdropCaptureState> State = MakeShared<FStashBackdropCaptureState>();
+		State->Size = Size;
+		State->AttemptIndex = AttemptIndex;
+		State->OnComplete = MoveTemp(OnComplete);
+
+		UE_LOG(LogStash, Log, TEXT("[StashBackdrop] CaptureViewport: enqueue readback %dx%d (attempt %d/%d, viewportRHI=%d)"),
+			Size.X, Size.Y, AttemptIndex + 1, StashBackdropMaxCaptureAttempts, ViewportRHIRef.IsValid() ? 1 : 0);
+
+		ENQUEUE_RENDER_COMMAND(StashBackdropCaptureViewport)(
+			[SceneViewport, ViewportRHIRef, State](FRHICommandListImmediate& RHICmdList)
+			{
+				TArray<FColor> Bitmap;
+				FTextureRHIRef TextureRef = SceneViewport->GetRenderTargetTexture();
+				const TCHAR* TextureSource = TEXT("scene-render-target");
+				if (!TextureRef.IsValid() && ViewportRHIRef.IsValid())
+				{
+					TextureRef = RHIGetViewportBackBuffer(ViewportRHIRef.GetReference());
+					TextureSource = TEXT("swapchain-backbuffer");
+				}
+				if (!TextureRef.IsValid())
+				{
+					UE_LOG(LogStash, Verbose, TEXT("[StashBackdrop] CaptureViewport: no texture (attempt %d)"),
+						State->AttemptIndex + 1);
+					AsyncTask(ENamedThreads::GameThread, [State]()
+						{
+							State->OnComplete(TArray<uint8>());
+						});
+					return;
+				}
+
+				FReadSurfaceDataFlags ReadFlags;
+				ReadFlags.SetLinearToGamma(false);
+				const FIntRect SrcRect(0, 0, State->Size.X, State->Size.Y);
+				RHICmdList.ReadSurfaceData(TextureRef, SrcRect, Bitmap, ReadFlags);
+
+				AsyncTask(ENamedThreads::GameThread, [State, Bitmap = MoveTemp(Bitmap), TextureSource]() mutable
+					{
+						TArray<uint8> JpegBytes = EncodeViewportBitmapToJpeg(Bitmap, State->Size);
+						if (JpegBytes.Num() > 0)
+						{
+							UE_LOG(LogStash, Log, TEXT("[StashBackdrop] CaptureViewport: OK %s %dx%d jpegOut=%d bytes (attempt %d)"),
+								TextureSource, State->Size.X, State->Size.Y, JpegBytes.Num(), State->AttemptIndex + 1);
+						}
+						else
+						{
+							UE_LOG(LogStash, Verbose, TEXT("[StashBackdrop] CaptureViewport: readback empty from %s %dx%d (attempt %d)"),
+								TextureSource, State->Size.X, State->Size.Y, State->AttemptIndex + 1);
+						}
+						State->OnComplete(MoveTemp(JpegBytes));
+					});
+			});
+#else
+		OnComplete(TArray<uint8>());
+#endif
+	}
+
+#if PLATFORM_ANDROID
+	static void ScheduleViewportCaptureAttempt(TSharedRef<FStashCaptureRetryState> State)
+	{
+		if (!State->WeakWorld.IsValid())
+		{
+			UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: world gone before capture"));
+			State->OnDone(TArray<uint8>());
+			return;
+		}
+
+		CaptureViewportToJpegBytesAsync(
+			[State](TArray<uint8>&& Bytes) mutable
+			{
+				if (Bytes.Num() > 0)
+				{
+					State->OnDone(MoveTemp(Bytes));
+					return;
+				}
+
+				++State->AttemptIndex;
+				if (State->AttemptIndex >= StashBackdropMaxCaptureAttempts)
+				{
+					UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: gave up after %d attempts (null backbuffer)"),
+						StashBackdropMaxCaptureAttempts);
+					State->OnDone(TArray<uint8>());
+					return;
+				}
+
+				if (UWorld* World = State->WeakWorld.Get())
+				{
+					World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateLambda([State]()
+						{
+							ScheduleViewportCaptureAttempt(State);
+						}));
+				}
+				else
+				{
+					State->OnDone(TArray<uint8>());
+				}
+			},
+			State->AttemptIndex);
+	}
+#endif
+
+	static void ScheduleViewportCapture(UObject* WorldContextObject, TFunction<void(TArray<uint8>)> OnDone)
+	{
+		UWorld* World = GEngine ? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull) : nullptr;
+		if (!World)
+		{
+			UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: no world from context — empty bytes"));
+			OnDone(TArray<uint8>());
+			return;
+		}
+
+		UE_LOG(LogStash, Log, TEXT("[StashBackdrop] CaptureViewport: scheduling capture with retries (world=%s)"), *World->GetName());
+#if PLATFORM_ANDROID
+		TSharedRef<FStashCaptureRetryState> State = MakeShared<FStashCaptureRetryState>();
+		State->WeakWorld = World;
+		State->OnDone = MoveTemp(OnDone);
+		World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateLambda([State]()
+			{
+				ScheduleViewportCaptureAttempt(State);
+			}));
+#else
+		UE_LOG(LogStash, Verbose, TEXT("[StashBackdrop] CaptureViewport: non-Android, empty bytes"));
+		OnDone(TArray<uint8>());
+#endif
+	}
+
+	class FStashViewportCaptureLatentAction : public FPendingLatentAction
+	{
+	public:
+		FName ExecutionFunction;
+		int32 OutputLink;
+		FWeakObjectPtr CallbackTarget;
+		TArray<uint8>& OutImageBytes;
+		TArray<uint8> CapturedBytes;
+		bool bFinished;
+
+		FStashViewportCaptureLatentAction(const FLatentActionInfo& LatentInfo, TArray<uint8>& InOutImageBytes)
+			: ExecutionFunction(LatentInfo.ExecutionFunction)
+			, OutputLink(LatentInfo.Linkage)
+			, CallbackTarget(LatentInfo.CallbackTarget)
+			, OutImageBytes(InOutImageBytes)
+			, bFinished(false)
+		{
+		}
+
+		virtual void UpdateOperation(FLatentResponse& Response) override
+		{
+			if (bFinished)
+			{
+				OutImageBytes = MoveTemp(CapturedBytes);
+			}
+			Response.FinishAndTriggerIf(bFinished, ExecutionFunction, OutputLink, CallbackTarget);
+		}
+	};
+}
+
+void UStashBlueprint::CaptureViewportForAndroidCheckoutBackdrop(UObject* WorldContextObject, FOnStashViewportCaptureComplete OnComplete)
+{
+	ScheduleViewportCapture(WorldContextObject, [OnComplete](TArray<uint8> Bytes) mutable
+		{
+			OnComplete.ExecuteIfBound(Bytes);
+		});
+}
+
+void UStashBlueprint::CaptureViewportForAndroidCheckoutBackdropLatent(UObject* WorldContextObject, TArray<uint8>& OutImageBytes, FLatentActionInfo LatentInfo)
+{
+	if (UWorld* World = GEngine ? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull) : nullptr)
+	{
+		FLatentActionManager& LatentManager = World->GetLatentActionManager();
+		FStashViewportCaptureLatentAction* LatentAction = new FStashViewportCaptureLatentAction(LatentInfo, OutImageBytes);
+		LatentManager.AddNewAction(LatentInfo.CallbackTarget, LatentInfo.UUID, LatentAction);
+		ScheduleViewportCapture(WorldContextObject, [LatentAction](TArray<uint8> Bytes)
+			{
+				LatentAction->CapturedBytes = MoveTemp(Bytes);
+				LatentAction->bFinished = true;
+			});
+		return;
+	}
+
+	UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewportLatent: no world from context — empty bytes"));
+	OutImageBytes.Reset();
 }
 
 /** Resolves Stash subsystem from an optional world context. Used by GetStashSubsystem and by native callbacks. */

@@ -7,6 +7,7 @@ Saved/
 
 # Unreal Engine Packaging
 packaged/
+package/
 
 # Unreal Engine IDE Files
 FileOpenOrder/
@@ -37,6 +38,7 @@ FileOpenOrder/
 
 # Visual Studio files
 .vs/
+*.vsconfig
 *.sln
 *.suo
 *.user
