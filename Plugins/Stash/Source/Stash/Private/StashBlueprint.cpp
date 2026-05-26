@@ -390,7 +390,6 @@ namespace
 	};
 
 	static void ScheduleViewportCaptureAttempt(TSharedRef<FStashCaptureRetryState> State);
-#endif
 
 	static TArray<uint8> EncodeViewportBitmapToJpeg(const TArray<FColor>& Bitmap, const FIntPoint& Size)
 	{
@@ -410,6 +409,7 @@ namespace
 		OutBytes.Append(Compressed.GetData(), static_cast<int32>(Compressed.Num()));
 		return OutBytes;
 	}
+#endif
 
 	/** Read back the game viewport on the render thread (safe for Android Vulkan). Callback runs on game thread. */
 	static void CaptureViewportToJpegBytesAsync(TFunction<void(TArray<uint8>&&)> OnComplete, int32 AttemptIndex)
