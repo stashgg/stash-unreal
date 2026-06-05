@@ -115,3 +115,6 @@ CrashReports/
 
 # Visual Studio settings
 *.sln.DotSettings.user
+
+# Scripts
+Scripts/

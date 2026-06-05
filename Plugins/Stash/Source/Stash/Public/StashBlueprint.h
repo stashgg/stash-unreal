@@ -37,6 +37,15 @@ struct FStashKeepAliveConfig
 	/** Notification body text. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash")
 	FString NotificationText;
+
+	/**
+	 * Android only. Base name of a drawable in the game's merged APK (no @drawable/, no extension).
+	 * Example: "stash_payment_icon" for res/drawable/stash_payment_icon.xml.
+	 * Leave empty to use the Stash SDK default notification icon.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash",
+		meta = (DisplayName = "Notification Icon Drawable Name (Android)"))
+	FString NotificationIconDrawableName;
 };
 
 /**
@@ -269,6 +278,20 @@ public:
 	// ========================================================================
 
 	/**
+	 * Builds a keep-alive config for Set Android Keep Alive Config (Android only).
+	 *
+	 * @param NotificationTitle Notification title while the user is outside the app.
+	 * @param NotificationText Notification body text.
+	 * @param NotificationIconDrawableName Drawable base name in the game APK (no @drawable/, no extension); leave empty for SDK default.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Make Stash Keep Alive Config"))
+	static FStashKeepAliveConfig MakeStashKeepAliveConfig(
+		FString NotificationTitle,
+		FString NotificationText,
+		FString NotificationIconDrawableName = TEXT("")
+	);
+
+	/**
 	 * (iOS) When enabled, the app stays in landscape when card/modal is not open; portrait is allowed only while Stash UI is displayed. Call at game startup for landscape-only games. No effect on Android.
 	 *
 	 * @param bEnable true to lock to landscape when card closed, false to use default orientations
@@ -283,7 +306,7 @@ public:
 	static void SetAndroidKeepAliveEnabled(bool bEnabled);
 
 	/**
-	 * (Android) Sets notification title and text for the keep-alive service. Call after Set Android Keep Alive Enabled if needed. No effect on iOS.
+	 * (Android) Sets notification title, text, and optional notification icon (drawable name) for the keep-alive service. Call after Set Android Keep Alive Enabled if needed. No effect on iOS.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Set Android Keep Alive Config"))
 	static void SetAndroidKeepAliveConfig(const FStashKeepAliveConfig& Config);

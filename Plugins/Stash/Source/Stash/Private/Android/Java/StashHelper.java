@@ -4,6 +4,7 @@
 package com.Plugins.Stash;
 
 import android.app.Activity;
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Handler;
@@ -500,10 +501,16 @@ public class StashHelper {
     }
 
     /**
-     * Sets notification title and text for the keep-alive service.
+     * Sets notification title, text, and optional small icon for the keep-alive service.
+     *
+     * @param notificationIconDrawableName drawable base name in the app package, or empty for SDK default
      */
     @Keep
-    public static void SetKeepAliveConfig(Activity activity, String notificationTitle, String notificationText) {
+    public static void SetKeepAliveConfig(
+            Activity activity,
+            String notificationTitle,
+            String notificationText,
+            String notificationIconDrawableName) {
         if (activity != null && !isInitialized) {
             Initialize(activity);
         }
@@ -511,6 +518,24 @@ public class StashHelper {
             StashNativeCard.KeepAliveConfig cfg = new StashNativeCard.KeepAliveConfig();
             cfg.notificationTitle = notificationTitle != null ? notificationTitle : "";
             cfg.notificationText = notificationText != null ? notificationText : "";
+            int iconResId = 0;
+            if (notificationIconDrawableName != null) {
+                String name = notificationIconDrawableName.trim();
+                if (!name.isEmpty()) {
+                    Context ctx = activity != null
+                            ? activity.getApplicationContext()
+                            : null;
+                    if (ctx != null) {
+                        iconResId = ctx.getResources().getIdentifier(
+                                name, "drawable", ctx.getPackageName());
+                    }
+                    if (iconResId == 0) {
+                        Log.w(TAG, "Keep-alive notification icon drawable not found: "
+                                + name + " (add to Build/Android/res/drawable/)");
+                    }
+                }
+            }
+            cfg.notificationIconResId = iconResId;
             StashNativeCard.getInstance().setKeepAliveConfig(cfg);
         } catch (Exception e) {
             Log.e(TAG, "Error setKeepAliveConfig: " + e.getMessage());

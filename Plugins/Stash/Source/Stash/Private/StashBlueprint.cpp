@@ -63,6 +63,18 @@ FStashCardConfig UStashBlueprint::MakeStashCardConfig(
 	return Config;
 }
 
+FStashKeepAliveConfig UStashBlueprint::MakeStashKeepAliveConfig(
+	FString NotificationTitle,
+	FString NotificationText,
+	FString NotificationIconDrawableName)
+{
+	FStashKeepAliveConfig Config;
+	Config.NotificationTitle = MoveTemp(NotificationTitle);
+	Config.NotificationText = MoveTemp(NotificationText);
+	Config.NotificationIconDrawableName = MoveTemp(NotificationIconDrawableName);
+	return Config;
+}
+
 void UStashBlueprint::OpenCard(const FString& URL)
 {
 	if (URL.IsEmpty())
@@ -331,7 +343,8 @@ void UStashBlueprint::SetAndroidKeepAliveConfig(const FStashKeepAliveConfig& Con
 		"",
 		true,
 		Config.NotificationTitle,
-		Config.NotificationText
+		Config.NotificationText,
+		Config.NotificationIconDrawableName
 	);
 #else
 	UE_LOG(LogStash, Log, TEXT("[Stash] SetAndroidKeepAliveConfig: no-op on this platform"));
