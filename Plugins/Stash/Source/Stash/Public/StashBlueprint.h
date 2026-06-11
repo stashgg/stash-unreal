@@ -40,7 +40,7 @@ struct FStashKeepAliveConfig
 
 	/**
 	 * Android only. Base name of a drawable in the game's merged APK (no @drawable/, no extension).
-	 * Example: "stash_payment_icon" for res/drawable/stash_payment_icon.xml.
+	 * Example: "stash_icon" for res/drawable/stash_icon.png.
 	 * Leave empty to use the Stash SDK default notification icon.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash",
@@ -335,8 +335,11 @@ public:
 	static void CaptureViewportForAndroidCheckoutBackdrop(UObject* WorldContextObject, FOnStashViewportCaptureComplete OnComplete);
 
 	/**
-	 * (Android) Same capture as the delegate version; use the white **Completed** exec pin and **Out Image Bytes** in Blueprint.
-	 * Wire Completed → Set members (Android Checkout Backdrop) → Open Card With Config.
+	 * (Android) Latent action that captures the game viewport after the current frame finishes rendering, compresses to JPEG, and outputs bytes on the white **Completed** exec pin.
+	 * Prefer this node in Widget Blueprints (no delegate binding). Wire **Completed** → set **Android Checkout Backdrop** on **Stash Card Config** → **Open Card With Config**.
+	 *
+	 * @param WorldContextObject World, Actor, Player Controller, or Game Instance used to schedule the capture
+	 * @param OutImageBytes JPEG bytes on success, or an empty array on failure
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Capture Viewport For Android Checkout Backdrop", WorldContext = "WorldContextObject", Latent, LatentInfo = "LatentInfo"))
 	static void CaptureViewportForAndroidCheckoutBackdropLatent(UObject* WorldContextObject, TArray<uint8>& OutImageBytes, FLatentActionInfo LatentInfo);

@@ -118,3 +118,6 @@ CrashReports/
 
 # Scripts
 Scripts/
+
+# Internal engineering notes (not for distribution)
+internal-docs/

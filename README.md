@@ -307,7 +307,9 @@ UE_ROOT="/path/to/UnrealEngine-4.27"
 
 ## Versioning
 
-This plugin follows semantic versioning (major.minor.patch). Pair it with **Stash Native 2.2.x** binaries in `ThirdParty` for **keep-alive notification icon** (`KeepAliveConfig.notificationIconResId`), **backgroundColor**, **onExternalPayment**, and **keep-alive** APIs. **StashNative-2.1.4+** remains required for checkout backdrop (`setBackdropBytes`). Stash Native 2.0+ uses **OpenCard**, **OpenModal**, **OpenBrowser**, and **CloseBrowser**; legacy **OpenCheckout** / **StashPay** naming is no longer used.
+This plugin follows semantic versioning (major.minor.patch). Pair it with **Stash Native 2.2.x** binaries in `ThirdParty` for **keep-alive notification icon** (`KeepAliveConfig.notificationIconResId`), **backgroundColor**, **onExternalPayment**, and **keep-alive** APIs. 
+**StashNative-2.1.4+** remains required for checkout backdrop (`setBackdropBytes`).
+**Stash Native 2.0+** uses **OpenCard**, **OpenModal**, **OpenBrowser**, and **CloseBrowser**; legacy **OpenCheckout** / **StashPay** naming is no longer used.
 
 ## Support
 
