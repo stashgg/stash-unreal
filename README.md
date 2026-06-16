@@ -1,23 +1,20 @@
-# Stash for Unreal Engine 4
+# Stash for Unreal Engine 5
 
 <p align="left">
   <img src="https://github.com/stashgg/stash-native/raw/main/.github/assets/stash_unreal.png" width="128" height="128" alt="Stash Unreal Logo"/>
 </p>
 
-> **For Unreal Engine 5:**  
-> This branch targets Unreal Engine 4.27+. For new projects, we recommend Unreal Engine 5 with our actively maintained SDK. See the [main branch](https://github.com/stashgg/stash-unreal) for UE5 support.
-
-Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash-native), enabling Stash Pay IAP checkout and webshop presentation on Android and iOS via C++ and Blueprints. The plugin uses **Stash Native** (**2.1.1+**).
+Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash-native), enabling Stash Pay IAP checkout and webshop presentation on Android and iOS via C++ and Blueprints. The plugin uses **Stash Native** (**2.2.1**).
 
 ## Requirements
 
-- Unreal Engine 4.27+
+- Unreal Engine 5.0+ (sample project targets **5.7**)
 - iOS 12.0+ / Android API 21+
 - Xcode (iOS), Visual Studio (Windows/Android), Android SDK (Android)
 
 ## Sample / Downloads
 
-- **Run the sample:** Clone this repo and open `StashUnreal5.uproject` in Unreal Engine 4.27+.
+- **Run the sample:** Clone this repo and open `StashUnreal5.uproject` in Unreal Engine 5.
 - **Use in your project:** Copy the `Plugins/Stash/` folder into your project’s `Plugins/` directory and enable the plugin under **Edit → Plugins → Mobile → Stash**.
 
 ## Quick Start
@@ -257,7 +254,7 @@ if (UStashSubsystem* Stash = UStashBlueprint::GetStashSubsystem(this))
 
 ## Blueprint usage
 
-Use the **Stash** category nodes for Open Card, Open Modal, Open Browser, configs, and landscape lock. The two screenshots above show card and modal flows. For callbacks, use a C++ bridge that binds delegates and calls BlueprintImplementableEvent.
+Use the **Stash** category nodes for Open Card, Open Modal, Open Browser, configs, and landscape lock. The two screenshots above show card and modal flows. For callbacks, use **Get Stash Subsystem** and bind to its events (see **Listening to callbacks** above)—no C++ bridge required.
 
 ---
 
@@ -266,7 +263,7 @@ Use the **Stash** category nodes for Open Card, Open Modal, Open Browser, config
 - **Get Stash Subsystem returns null:** Ensure you pass a valid world context (e.g. **Self** from Level Blueprint or an Actor in a running game). In the editor before Play-in-Editor there is no play world, so the subsystem is not available.
 - **Blueprint shows old nodes (Open Checkout, Set Force Web Based Checkout):** The plugin API is **Open Card**, **Open Card With Config**, **Open Browser**, **Close Browser**, **Is Card Open**, **Dismiss Card** (no Open Checkout, no Force Web Based). If you still see old names, do a **clean rebuild**: close the editor, delete the `Intermediate` and `Binaries` folders in your project root, then reopen the `.uproject`. The editor will recompile and Blueprint will show only the new Stash nodes.
 - **iOS – undefined symbol / Library not loaded:** Add WebKit and SafariServices if needed; ensure **StashNative.xcframework** is embedded (Embed & Sign) and present under `Plugins/Stash/Source/Stash/ThirdParty/iOS/`.
-- **Android – class not found / blank card:** Ensure **StashNative** AAR is in `ThirdParty/Android/` (e.g. `StashNative-2.2.0.aar`; the filename must match `Stash_UPL_Android.xml` → `gradleCopies`). Add internet permission. ProGuard: keep `com.stash.**`.
+- **Android – class not found / blank card:** Ensure **StashNative** AAR is in `ThirdParty/Android/` (e.g. `StashNative-2.2.1.aar`; the filename must match `Stash_UPL_Android.xml` → `gradleCopies`). Add internet permission. ProGuard: keep `com.stash.**`.
 - **Android – checkout backdrop has no effect:** Use a Stash Native Android AAR that includes `setBackdropBytes(byte[])` on `StashNativeCard` (2.1.4+ in this repo). Confirm call order: set bytes (or capture delegate) **before** Open Card. If you replace the AAR with another build, update the `gradleCopies` `copyFile` `src` path to that filename.
 - **Blueprint – "Only exactly matching structures" between Make Stash Card Config and Open Card With Config:** Usually a **stale graph** after the `FStashCardConfig` struct changed. **Close the editor**, rebuild the **Stash** plugin (or full project), reopen, then **delete** the **Make Stash Card Config** and **Open Card With Config** nodes and place them again from the **Stash** category (or use **Refresh All Nodes** on the Blueprint). Ensure you are not mixing a **User-defined struct** with the same display name as the plugin’s **Stash Card Config**; the shell color pin must be **String** (HTML hex like `#RRGGBB`), not Linear Color.
 - **Blueprint – Make Stash Keep Alive Config missing Notification Icon Drawable Name:** The C++ struct changed; the editor is still using old plugin bytecode. **Close the editor**, rebuild the **Stash** plugin, reopen, **delete** the old **Make Stash Keep Alive Config** node, and add a fresh one from the **Stash** category (right-click → Stash → **Make Stash Keep Alive Config**). Prefer that node over the generic struct **Make** pin on **Stash Keep Alive Config**.
@@ -286,14 +283,14 @@ Use the **Stash** category nodes for Open Card, Open Modal, Open Browser, config
 **macOS:**
 
 ```bash
-UE_ROOT="/path/to/UnrealEngine-4.27"
+UE_ROOT="/path/to/UnrealEngine"
 "$UE_ROOT/Engine/Build/BatchFiles/Mac/GenerateProjectFiles.sh" -project="$(pwd)/StashUnreal5.uproject" -game
 ```
 
 **Windows:**
 
 ```bat
-"C:\Path\To\UnrealEngine\Engine\Build\BatchFiles\GenerateProjectFiles.bat" "C:\Path\To\stash-unreal\StashUnreal5.uproject" -game
+"C:\Path\To\UnrealEngine\Engine\Build\BatchFiles\GenerateProjectFiles.bat" "C:\Path\To\stash-unreal-2\StashUnreal5.uproject" -game
 ```
 
 **Clean rebuild:** Remove `Binaries`, `Intermediate`, `Saved/StagedBuilds`, then reopen the project.

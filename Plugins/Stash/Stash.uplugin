@@ -13,7 +13,6 @@
 	"CanContainContent": false,
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
-	"Installed": true,
 	"EnabledByDefault": false,
 	"RequiresBuildPlatform": true,
 	"Modules": [
