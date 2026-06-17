@@ -63,7 +63,7 @@ public class StashHelper {
                 return;
             }
 
-            Log.d(TAG, "Initializing StashHelper (Stash Native 2.2.1)");
+            Log.d(TAG, "Initializing StashHelper (Stash Native 2.2.3)");
 
             StashNativeCard card = StashNativeCard.getInstance();
             card.setActivity(activity);
