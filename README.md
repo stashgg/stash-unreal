@@ -14,7 +14,7 @@ Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash
 
 ## Sample / Downloads
 
-- **Run the sample:** Clone this repo and open `StashUnreal5.uproject` in Unreal Engine 5.
+- **Run the sample:** Clone this repo and open `StashUnreal5.uproject` in Unreal Engine 5. The sample Blueprint uses the example keep-alive icon **`stash_icon`**, shipped under `StashUnrealSample/Android/res/drawable/` (copied into the APK by `StashUnreal5_UPL_Android.xml` — not part of the Stash plugin).
 - **Use in your project:** Copy the `Plugins/Stash/` folder into your project’s `Plugins/` directory and enable the plugin under **Edit → Plugins → Mobile → Stash**.
 
 ## Quick Start
@@ -27,6 +27,7 @@ Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash
 ### Folder structure
 
 - **Plugins/Stash/** – Plugin root: `Source/Stash` (module), `ThirdParty` (StashNative AAR + XCFramework), `Resources`.
+- **StashUnrealSample/Android/** – Sample-only Android drawables (e.g. keep-alive notification icon); not copied when you use only the plugin in another project.
 - **StashBlueprint** – Blueprint function library: `OpenCard`, `OpenModal`, `OpenBrowser`, `CloseBrowser`, `SetAndroidCheckoutBackdropBytes`, `ClearAndroidCheckoutBackdrop`, `CaptureViewportForAndroidCheckoutBackdrop`, config structs, delegates.
 - **Key files:** `StashBlueprint.h`, iOS wrapper `StashNativeCardWrapper` (ObjC), Android `StashHelper.java`, ThirdParty StashNative binaries.
 
@@ -149,7 +150,7 @@ On low-memory or Android Go-class devices, the Android OS may kill your app when
 #### Blueprint
 
 1. Call **Set Android Keep Alive Enabled** (Stash category) with **true** — e.g. once at startup (**Begin Play**) or before opening checkout.
-2. Optionally: use **Make Stash Keep Alive Config** (Stash category — not the generic struct **Make** node), set **Notification Title**, **Notification Text**, and **Notification Icon Drawable Name** (e.g. “Payment in progress” / “Tap to return to the app” / `stash_payment_icon`), then call **Set Android Keep Alive Config** with the returned struct.
+2. Optionally: use **Make Stash Keep Alive Config** (Stash category — not the generic struct **Make** node), set **Notification Title**, **Notification Text**, and **Notification Icon Drawable Name** (e.g. “Payment in progress” / “Tap to return to the app” / `stash_icon`), then call **Set Android Keep Alive Config** with the returned struct.
 
 #### C++
 
@@ -160,7 +161,7 @@ UStashBlueprint::SetAndroidKeepAliveEnabled(true);
 FStashKeepAliveConfig KA;
 KA.NotificationTitle = TEXT("Payment in progress");
 KA.NotificationText = TEXT("Tap to return to the app");
-KA.NotificationIconDrawableName = TEXT("stash_payment_icon"); // or leave empty for SDK default
+KA.NotificationIconDrawableName = TEXT("stash_icon"); // or leave empty for SDK default
 UStashBlueprint::SetAndroidKeepAliveConfig(KA);
 ```
 
@@ -168,9 +169,11 @@ UStashBlueprint::SetAndroidKeepAliveConfig(KA);
 
 Add a white/alpha silhouette drawable under your game project, for example:
 
-`YourProject/Build/Android/res/drawable/stash_payment_icon.xml`
+`YourProject/Build/Android/res/drawable/stash_icon.png`
 
-In Blueprint, set **Notification Icon Drawable Name** to `stash_payment_icon` (no `@drawable/`, no `.xml` extension). Call **Set Android Keep Alive Enabled** → **true**, then **Set Android Keep Alive Config**, before **Open Browser** or other flows that leave the app.
+(or `.xml` for a vector drawable). In Blueprint, set **Notification Icon Drawable Name** to the base name only — `stash_icon` (no `@drawable/`, no extension). Call **Set Android Keep Alive Enabled** → **true**, then **Set Android Keep Alive Config**, before **Open Browser** or other flows that leave the app.
+
+**This sample repo** also ships `stash_icon.png` under `StashUnrealSample/Android/res/drawable/` for the demo Blueprint; that folder is copied at build time via the game module UPL (`Source/StashUnreal5/StashUnreal5_UPL_Android.xml`), not the Stash plugin.
 
 Custom notification icons require **StashNative-2.2.0+** in `ThirdParty/Android/` (bundled with this plugin via `Stash_UPL_Android.xml`).
 

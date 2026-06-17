@@ -1,6 +1,7 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Pay Unreal Engine 4 SDK Demo Project
+// Stash Pay Unreal Engine SDK Demo Project
 
+using System.IO;
 using UnrealBuildTool;
 
 public class StashUnreal5 : ModuleRules
@@ -16,5 +17,13 @@ public class StashUnreal5 : ModuleRules
             "InputCore",
             "Stash"
         });
+
+        // Sample-only: example keep-alive notification icons (StashUnrealSample/Android/res/drawable/)
+        if (Target.Platform == UnrealTargetPlatform.Android)
+        {
+            AdditionalPropertiesForReceipt.Add(
+                "AndroidPlugin",
+                Path.Combine(ModuleDirectory, "StashUnreal5_UPL_Android.xml"));
+        }
     }
 }
