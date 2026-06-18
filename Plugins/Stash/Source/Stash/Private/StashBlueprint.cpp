@@ -1,43 +1,24 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Unreal Engine SDK - Blueprint Function Library Implementation
+//
+// Blueprint-facing Stash API (UStashBlueprint): open card/modal/browser, configs, and Android backdrop helpers.
+// Native callbacks and subsystem resolution live in StashBlueprintCallbacks.cpp.
+// Viewport capture implementation lives in Android/StashAndroidBackdropCapture.cpp.
 
 #include "StashBlueprint.h"
 #include "Stash.h"
-#include "StashSubsystem.h"
-#include "Async/Async.h"
-#include "Engine/Engine.h"
-#include "Engine/World.h"
-#include "Engine/GameInstance.h"
-#include "GameFramework/Actor.h"
-#include "GameFramework/PlayerController.h"
-#include "LatentActions.h"
-#include "TimerManager.h"
+#include "Android/StashAndroidBackdropCapture.h"
 
 #if PLATFORM_ANDROID
 #include "Android/Utils/AndroidUtils.h"
-#include "Engine/GameViewportClient.h"
-#include "IImageWrapper.h"
-#include "IImageWrapperModule.h"
-#include "Modules/ModuleManager.h"
-#include "RHI.h"
-#include "RHICommandList.h"
-#include "RenderingThread.h"
-#include "Slate/SceneViewport.h"
 #endif
 
 #if PLATFORM_IOS
-#include "IOS/Utils/ObjC_Convert.h"
 #include "IOS/ObjC/StashNativeCardWrapper.h"
 #endif
 
-// Initialize static delegates
-FOnStashPaymentSuccess UStashBlueprint::OnPaymentSuccess;
-FOnStashPaymentFailure UStashBlueprint::OnPaymentFailure;
-FOnStashDialogDismissed UStashBlueprint::OnDialogDismissed;
-FOnStashOptInResponse UStashBlueprint::OnOptInResponse;
-FOnStashPageLoaded UStashBlueprint::OnPageLoaded;
-FOnStashNetworkError UStashBlueprint::OnNetworkError;
-FOnStashExternalPayment UStashBlueprint::OnExternalPayment;
+// ---------------------------------------------------------------------------
+// Config factories (Blueprint "Make" nodes)
+// ---------------------------------------------------------------------------
 
 FStashCardConfig UStashBlueprint::MakeStashCardConfig(
 	bool bForcePortrait,
@@ -74,6 +55,10 @@ FStashKeepAliveConfig UStashBlueprint::MakeStashKeepAliveConfig(
 	Config.NotificationIconDrawableName = MoveTemp(NotificationIconDrawableName);
 	return Config;
 }
+
+// ---------------------------------------------------------------------------
+// Card presentation (openCard)
+// ---------------------------------------------------------------------------
 
 void UStashBlueprint::OpenCard(const FString& URL)
 {
@@ -147,6 +132,10 @@ void UStashBlueprint::OpenCardWithConfig(const FString& URL, const FStashCardCon
 #endif
 }
 
+// ---------------------------------------------------------------------------
+// Card / modal state
+// ---------------------------------------------------------------------------
+
 bool UStashBlueprint::IsCardOpen()
 {
 #if PLATFORM_IOS
@@ -195,6 +184,10 @@ void UStashBlueprint::DismissCard()
 #endif
 }
 
+// ---------------------------------------------------------------------------
+// System browser (openBrowser / closeBrowser)
+// ---------------------------------------------------------------------------
+
 void UStashBlueprint::OpenBrowser(const FString& URL)
 {
 	if (URL.IsEmpty())
@@ -231,9 +224,9 @@ void UStashBlueprint::CloseBrowser()
 #endif
 }
 
-// ============================================================================
-// Modal Presentation (Stash Native 2.0)
-// ============================================================================
+// ---------------------------------------------------------------------------
+// Modal presentation (openModal)
+// ---------------------------------------------------------------------------
 
 void UStashBlueprint::OpenModal(const FString& URL)
 {
@@ -251,7 +244,7 @@ void UStashBlueprint::OpenModal(const FString& URL)
 		"com/Plugins/Stash/StashHelper",
 		"OpenModal",
 		"",
-		true,  // Pass activity
+		true,
 		URL
 	);
 #else
@@ -286,7 +279,7 @@ void UStashBlueprint::OpenModalWithConfig(const FString& URL, const FStashModalC
 		"com/Plugins/Stash/StashHelper",
 		"OpenModalWithConfig",
 		"",
-		true,  // Pass activity
+		true,
 		URL,
 		Config.bAllowDismiss,
 		Config.PhoneWidthRatioPortrait,
@@ -304,16 +297,15 @@ void UStashBlueprint::OpenModalWithConfig(const FString& URL, const FStashModalC
 #endif
 }
 
-// ============================================================================
-// Configuration (Stash Native 2.0)
-// ============================================================================
+// ---------------------------------------------------------------------------
+// Platform configuration (iOS orientation lock, Android keep-alive)
+// ---------------------------------------------------------------------------
 
 void UStashBlueprint::SetLandscapeLockWhenCardClosed(bool bEnable)
 {
 #if PLATFORM_IOS
 	[[StashNativeCardWrapper sharedInstance] setLandscapeLockWhenCardClosed:bEnable];
 #else
-	// Android: no-op; orientation lock is handled by project/activity settings
 	(void)bEnable;
 #endif
 }
@@ -350,6 +342,10 @@ void UStashBlueprint::SetAndroidKeepAliveConfig(const FStashKeepAliveConfig& Con
 	UE_LOG(LogStash, Log, TEXT("[Stash] SetAndroidKeepAliveConfig: no-op on this platform"));
 #endif
 }
+
+// ---------------------------------------------------------------------------
+// Android checkout backdrop (setBackdropBitmap path; see StashAndroidBackdropCapture for capture)
+// ---------------------------------------------------------------------------
 
 void UStashBlueprint::SetAndroidCheckoutBackdropBytes(const TArray<uint8>& ImageBytes)
 {
@@ -390,231 +386,11 @@ void UStashBlueprint::ClearAndroidCheckoutBackdrop()
 #endif
 }
 
-namespace
-{
-#if PLATFORM_ANDROID
-	static constexpr int32 StashBackdropMaxCaptureAttempts = 15;
-
-	struct FStashCaptureRetryState
-	{
-		TWeakObjectPtr<UWorld> WeakWorld;
-		TFunction<void(TArray<uint8>)> OnDone;
-		int32 AttemptIndex = 0;
-	};
-
-	static void ScheduleViewportCaptureAttempt(TSharedRef<FStashCaptureRetryState> State);
-
-	static TArray<uint8> EncodeViewportBitmapToJpeg(const TArray<FColor>& Bitmap, const FIntPoint& Size)
-	{
-		TArray<uint8> OutBytes;
-		if (Bitmap.Num() == 0 || Size.X <= 0 || Size.Y <= 0)
-		{
-			return OutBytes;
-		}
-		IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
-		TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::JPEG);
-		if (!ImageWrapper.IsValid() || !ImageWrapper->SetRaw(Bitmap.GetData(), Bitmap.Num() * sizeof(FColor), Size.X, Size.Y, ERGBFormat::BGRA, 8))
-		{
-			UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: JPEG wrap failed (bitmap pixels=%d)"), Bitmap.Num());
-			return OutBytes;
-		}
-		const TArray64<uint8>& Compressed = ImageWrapper->GetCompressed(85);
-		OutBytes.Append(Compressed.GetData(), static_cast<int32>(Compressed.Num()));
-		return OutBytes;
-	}
-#endif
-
-	/** Read back the game viewport on the render thread (safe for Android Vulkan). Callback runs on game thread. */
-	static void CaptureViewportToJpegBytesAsync(TFunction<void(TArray<uint8>&&)> OnComplete, int32 AttemptIndex)
-	{
-#if PLATFORM_ANDROID
-		if (!IsInGameThread())
-		{
-			UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: must run on game thread"));
-			OnComplete(TArray<uint8>());
-			return;
-		}
-		if (!GEngine || !GEngine->GameViewport || !GEngine->GameViewport->Viewport)
-		{
-			UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: no GameViewport"));
-			OnComplete(TArray<uint8>());
-			return;
-		}
-		FSceneViewport* SceneViewport = static_cast<FSceneViewport*>(GEngine->GameViewport->Viewport);
-		const FIntPoint Size = SceneViewport->GetSizeXY();
-		if (Size.X <= 0 || Size.Y <= 0)
-		{
-			UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: bad viewport size %dx%d"), Size.X, Size.Y);
-			OnComplete(TArray<uint8>());
-			return;
-		}
-
-		const FViewportRHIRef ViewportRHIRef = SceneViewport->GetViewportRHI();
-
-		struct FStashBackdropCaptureState
-		{
-			FIntPoint Size = FIntPoint::ZeroValue;
-			int32 AttemptIndex = 0;
-			TFunction<void(TArray<uint8>&&)> OnComplete;
-		};
-		TSharedRef<FStashBackdropCaptureState> State = MakeShared<FStashBackdropCaptureState>();
-		State->Size = Size;
-		State->AttemptIndex = AttemptIndex;
-		State->OnComplete = MoveTemp(OnComplete);
-
-		UE_LOG(LogStash, Log, TEXT("[StashBackdrop] CaptureViewport: enqueue readback %dx%d (attempt %d/%d, viewportRHI=%d)"),
-			Size.X, Size.Y, AttemptIndex + 1, StashBackdropMaxCaptureAttempts, ViewportRHIRef.IsValid() ? 1 : 0);
-
-		ENQUEUE_RENDER_COMMAND(StashBackdropCaptureViewport)(
-			[SceneViewport, ViewportRHIRef, State](FRHICommandListImmediate& RHICmdList)
-			{
-				TArray<FColor> Bitmap;
-				FTextureRHIRef TextureRef = SceneViewport->GetRenderTargetTexture();
-				const TCHAR* TextureSource = TEXT("scene-render-target");
-				if (!TextureRef.IsValid() && ViewportRHIRef.IsValid())
-				{
-					TextureRef = RHIGetViewportBackBuffer(ViewportRHIRef.GetReference());
-					TextureSource = TEXT("swapchain-backbuffer");
-				}
-				if (!TextureRef.IsValid())
-				{
-					UE_LOG(LogStash, Verbose, TEXT("[StashBackdrop] CaptureViewport: no texture (attempt %d)"),
-						State->AttemptIndex + 1);
-					AsyncTask(ENamedThreads::GameThread, [State]()
-						{
-							State->OnComplete(TArray<uint8>());
-						});
-					return;
-				}
-
-				FReadSurfaceDataFlags ReadFlags;
-				ReadFlags.SetLinearToGamma(false);
-				const FIntRect SrcRect(0, 0, State->Size.X, State->Size.Y);
-				RHICmdList.ReadSurfaceData(TextureRef, SrcRect, Bitmap, ReadFlags);
-
-				AsyncTask(ENamedThreads::GameThread, [State, Bitmap = MoveTemp(Bitmap), TextureSource]() mutable
-					{
-						TArray<uint8> JpegBytes = EncodeViewportBitmapToJpeg(Bitmap, State->Size);
-						if (JpegBytes.Num() > 0)
-						{
-							UE_LOG(LogStash, Log, TEXT("[StashBackdrop] CaptureViewport: OK %s %dx%d jpegOut=%d bytes (attempt %d)"),
-								TextureSource, State->Size.X, State->Size.Y, JpegBytes.Num(), State->AttemptIndex + 1);
-						}
-						else
-						{
-							UE_LOG(LogStash, Verbose, TEXT("[StashBackdrop] CaptureViewport: readback empty from %s %dx%d (attempt %d)"),
-								TextureSource, State->Size.X, State->Size.Y, State->AttemptIndex + 1);
-						}
-						State->OnComplete(MoveTemp(JpegBytes));
-					});
-			});
-#else
-		OnComplete(TArray<uint8>());
-#endif
-	}
-
-#if PLATFORM_ANDROID
-	static void ScheduleViewportCaptureAttempt(TSharedRef<FStashCaptureRetryState> State)
-	{
-		if (!State->WeakWorld.IsValid())
-		{
-			UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: world gone before capture"));
-			State->OnDone(TArray<uint8>());
-			return;
-		}
-
-		CaptureViewportToJpegBytesAsync(
-			[State](TArray<uint8>&& Bytes) mutable
-			{
-				if (Bytes.Num() > 0)
-				{
-					State->OnDone(MoveTemp(Bytes));
-					return;
-				}
-
-				++State->AttemptIndex;
-				if (State->AttemptIndex >= StashBackdropMaxCaptureAttempts)
-				{
-					UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: gave up after %d attempts (null backbuffer)"),
-						StashBackdropMaxCaptureAttempts);
-					State->OnDone(TArray<uint8>());
-					return;
-				}
-
-				if (UWorld* World = State->WeakWorld.Get())
-				{
-					World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateLambda([State]()
-						{
-							ScheduleViewportCaptureAttempt(State);
-						}));
-				}
-				else
-				{
-					State->OnDone(TArray<uint8>());
-				}
-			},
-			State->AttemptIndex);
-	}
-#endif
-
-	static void ScheduleViewportCapture(UObject* WorldContextObject, TFunction<void(TArray<uint8>)> OnDone)
-	{
-		UWorld* World = GEngine ? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull) : nullptr;
-		if (!World)
-		{
-			UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: no world from context — empty bytes"));
-			OnDone(TArray<uint8>());
-			return;
-		}
-
-		UE_LOG(LogStash, Log, TEXT("[StashBackdrop] CaptureViewport: scheduling capture with retries (world=%s)"), *World->GetName());
-#if PLATFORM_ANDROID
-		TSharedRef<FStashCaptureRetryState> State = MakeShared<FStashCaptureRetryState>();
-		State->WeakWorld = World;
-		State->OnDone = MoveTemp(OnDone);
-		World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateLambda([State]()
-			{
-				ScheduleViewportCaptureAttempt(State);
-			}));
-#else
-		UE_LOG(LogStash, Verbose, TEXT("[StashBackdrop] CaptureViewport: non-Android, empty bytes"));
-		OnDone(TArray<uint8>());
-#endif
-	}
-
-	class FStashViewportCaptureLatentAction : public FPendingLatentAction
-	{
-	public:
-		FName ExecutionFunction;
-		int32 OutputLink;
-		FWeakObjectPtr CallbackTarget;
-		TArray<uint8>& OutImageBytes;
-		TArray<uint8> CapturedBytes;
-		bool bFinished;
-
-		FStashViewportCaptureLatentAction(const FLatentActionInfo& LatentInfo, TArray<uint8>& InOutImageBytes)
-			: ExecutionFunction(LatentInfo.ExecutionFunction)
-			, OutputLink(LatentInfo.Linkage)
-			, CallbackTarget(LatentInfo.CallbackTarget)
-			, OutImageBytes(InOutImageBytes)
-			, bFinished(false)
-		{
-		}
-
-		virtual void UpdateOperation(FLatentResponse& Response) override
-		{
-			if (bFinished)
-			{
-				OutImageBytes = MoveTemp(CapturedBytes);
-			}
-			Response.FinishAndTriggerIf(bFinished, ExecutionFunction, OutputLink, CallbackTarget);
-		}
-	};
-}
+// Thin wrappers; capture logic is in StashAndroidBackdropCapture.cpp (render-thread readback + JPEG).
 
 void UStashBlueprint::CaptureViewportForAndroidCheckoutBackdrop(UObject* WorldContextObject, FOnStashViewportCaptureComplete OnComplete)
 {
-	ScheduleViewportCapture(WorldContextObject, [OnComplete](TArray<uint8> Bytes) mutable
+	StashScheduleAndroidCheckoutBackdropCapture(WorldContextObject, [OnComplete](TArray<uint8> Bytes) mutable
 		{
 			OnComplete.ExecuteIfBound(Bytes);
 		});
@@ -622,230 +398,5 @@ void UStashBlueprint::CaptureViewportForAndroidCheckoutBackdrop(UObject* WorldCo
 
 void UStashBlueprint::CaptureViewportForAndroidCheckoutBackdropLatent(UObject* WorldContextObject, TArray<uint8>& OutImageBytes, FLatentActionInfo LatentInfo)
 {
-	if (UWorld* World = GEngine ? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull) : nullptr)
-	{
-		FLatentActionManager& LatentManager = World->GetLatentActionManager();
-		FStashViewportCaptureLatentAction* LatentAction = new FStashViewportCaptureLatentAction(LatentInfo, OutImageBytes);
-		LatentManager.AddNewAction(LatentInfo.CallbackTarget, LatentInfo.UUID, LatentAction);
-		ScheduleViewportCapture(WorldContextObject, [LatentAction](TArray<uint8> Bytes)
-			{
-				LatentAction->CapturedBytes = MoveTemp(Bytes);
-				LatentAction->bFinished = true;
-			});
-		return;
-	}
-
-	UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewportLatent: no world from context — empty bytes"));
-	OutImageBytes.Reset();
+	StashCaptureAndroidCheckoutBackdropLatent(WorldContextObject, OutImageBytes, LatentInfo);
 }
-
-/** Resolves Stash subsystem from an optional world context. Used by GetStashSubsystem and by native callbacks. */
-static UStashSubsystem* GetStashSubsystemFromContext(UObject* WorldContextObject)
-{
-	UWorld* World = nullptr;
-	if (WorldContextObject)
-	{
-		if (UWorld* W = Cast<UWorld>(WorldContextObject))
-		{
-			World = W;
-		}
-		else if (AActor* A = Cast<AActor>(WorldContextObject))
-		{
-			World = A->GetWorld();
-		}
-		else if (APlayerController* PC = Cast<APlayerController>(WorldContextObject))
-		{
-			World = PC->GetWorld();
-		}
-		else if (UGameInstance* GI = Cast<UGameInstance>(WorldContextObject))
-		{
-			if (FWorldContext* const Ctx = GI->GetWorldContext())
-			{
-				World = Ctx->World();
-			}
-		}
-	}
-	if (!World && GEngine)
-	{
-		World = GEngine->GetCurrentPlayWorld();
-	}
-	UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
-	return GI ? GI->GetSubsystem<UStashSubsystem>() : nullptr;
-}
-
-/** Dispatches a native callback on the game thread to subsystem events and legacy static delegates. */
-template<typename FSubBroadcast, typename FStaticBroadcast>
-static void BroadcastStashCallback(FSubBroadcast&& SubBroadcast, FStaticBroadcast&& StaticBroadcast)
-{
-	AsyncTask(ENamedThreads::GameThread, [
-		SubBroadcast = Forward<FSubBroadcast>(SubBroadcast),
-		StaticBroadcast = Forward<FStaticBroadcast>(StaticBroadcast)
-	]() mutable {
-		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr))
-		{
-			SubBroadcast(Sub);
-		}
-		StaticBroadcast();
-	});
-}
-
-UStashSubsystem* UStashBlueprint::GetStashSubsystem(UObject* WorldContextObject)
-{
-	return GetStashSubsystemFromContext(WorldContextObject);
-}
-
-void UStashBlueprint::HandlePaymentSuccess()
-{
-	UE_LOG(LogStash, Log, TEXT("[Stash] Payment success callback received"));
-	BroadcastStashCallback(
-		[](UStashSubsystem* Sub) { Sub->OnPaymentSuccess.Broadcast(); },
-		[]() { UStashBlueprint::OnPaymentSuccess.Broadcast(); });
-}
-
-void UStashBlueprint::HandlePaymentFailure()
-{
-	UE_LOG(LogStash, Log, TEXT("[Stash] Payment failure callback received"));
-	BroadcastStashCallback(
-		[](UStashSubsystem* Sub) { Sub->OnPaymentFailure.Broadcast(); },
-		[]() { UStashBlueprint::OnPaymentFailure.Broadcast(); });
-}
-
-void UStashBlueprint::HandleDialogDismissed()
-{
-	UE_LOG(LogStash, Log, TEXT("[Stash] Dialog dismissed callback received"));
-	BroadcastStashCallback(
-		[](UStashSubsystem* Sub) { Sub->OnDialogDismissed.Broadcast(); },
-		[]() { UStashBlueprint::OnDialogDismissed.Broadcast(); });
-}
-
-void UStashBlueprint::HandleOptInResponse(const FString& OptInType)
-{
-	UE_LOG(LogStash, Log, TEXT("[Stash] Opt-in response received: %s"), *OptInType);
-	BroadcastStashCallback(
-		[OptInType](UStashSubsystem* Sub) { Sub->OnOptInResponse.Broadcast(OptInType); },
-		[OptInType]() { UStashBlueprint::OnOptInResponse.Broadcast(OptInType); });
-}
-
-void UStashBlueprint::HandlePageLoaded(float LoadTimeMs)
-{
-	UE_LOG(LogStash, Log, TEXT("[Stash] Page loaded callback received: %.2f ms"), LoadTimeMs);
-	BroadcastStashCallback(
-		[LoadTimeMs](UStashSubsystem* Sub) { Sub->OnPageLoaded.Broadcast(LoadTimeMs); },
-		[LoadTimeMs]() { UStashBlueprint::OnPageLoaded.Broadcast(LoadTimeMs); });
-}
-
-void UStashBlueprint::HandleNetworkError()
-{
-	UE_LOG(LogStash, Warning, TEXT("[Stash] Network error callback received"));
-	BroadcastStashCallback(
-		[](UStashSubsystem* Sub) { Sub->OnNetworkError.Broadcast(); },
-		[]() { UStashBlueprint::OnNetworkError.Broadcast(); });
-}
-
-void UStashBlueprint::HandleExternalPayment(const FString& URL)
-{
-	UE_LOG(LogStash, Log, TEXT("[Stash] External payment URL: %s"), *URL);
-	BroadcastStashCallback(
-		[URL](UStashSubsystem* Sub) { Sub->OnExternalPayment.Broadcast(URL); },
-		[URL]() { UStashBlueprint::OnExternalPayment.Broadcast(URL); });
-}
-
-// iOS callback bridge (called from StashNativeCardWrapper.mm)
-#if PLATFORM_IOS
-extern "C" {
-	void StashNativeOnPaymentSuccess()
-	{
-		UStashBlueprint::HandlePaymentSuccess();
-	}
-
-	void StashNativeOnPaymentFailure()
-	{
-		UStashBlueprint::HandlePaymentFailure();
-	}
-
-	void StashNativeOnDialogDismissed()
-	{
-		UStashBlueprint::HandleDialogDismissed();
-	}
-
-	void StashNativeOnOptInResponse(const char* optinType)
-	{
-		UStashBlueprint::HandleOptInResponse(FString(UTF8_TO_TCHAR(optinType ? optinType : "")));
-	}
-
-	void StashNativeOnPageLoaded(double loadTimeMs)
-	{
-		UStashBlueprint::HandlePageLoaded((float)loadTimeMs);
-	}
-
-	void StashNativeOnNetworkError()
-	{
-		UStashBlueprint::HandleNetworkError();
-	}
-
-	void StashNativeOnExternalPayment(const char* url)
-	{
-		UStashBlueprint::HandleExternalPayment(FString(UTF8_TO_TCHAR(url ? url : "")));
-	}
-}
-#endif
-
-// Android JNI Callback functions (called from StashHelper.java)
-#if PLATFORM_ANDROID
-extern "C" {
-	JNIEXPORT void JNICALL Java_com_Plugins_Stash_StashHelper_nativeOnPaymentSuccess(JNIEnv* env, jclass clazz)
-	{
-		UStashBlueprint::HandlePaymentSuccess();
-	}
-	
-	JNIEXPORT void JNICALL Java_com_Plugins_Stash_StashHelper_nativeOnPaymentFailure(JNIEnv* env, jclass clazz)
-	{
-		UStashBlueprint::HandlePaymentFailure();
-	}
-	
-	JNIEXPORT void JNICALL Java_com_Plugins_Stash_StashHelper_nativeOnDialogDismissed(JNIEnv* env, jclass clazz)
-	{
-		UStashBlueprint::HandleDialogDismissed();
-	}
-	
-	JNIEXPORT void JNICALL Java_com_Plugins_Stash_StashHelper_nativeOnOptInResponse(JNIEnv* env, jclass clazz, jstring optinType)
-	{
-		FString OptInTypeStr;
-		if (optinType)
-		{
-			const char* UTFString = env->GetStringUTFChars(optinType, nullptr);
-			if (UTFString)
-			{
-				OptInTypeStr = FString(UTF8_TO_TCHAR(UTFString));
-				env->ReleaseStringUTFChars(optinType, UTFString);
-			}
-		}
-		UStashBlueprint::HandleOptInResponse(OptInTypeStr);
-	}
-	
-	JNIEXPORT void JNICALL Java_com_Plugins_Stash_StashHelper_nativeOnPageLoaded(JNIEnv* env, jclass clazz, jlong loadTimeMs)
-	{
-		UStashBlueprint::HandlePageLoaded((float)loadTimeMs);
-	}
-	
-	JNIEXPORT void JNICALL Java_com_Plugins_Stash_StashHelper_nativeOnNetworkError(JNIEnv* env, jclass clazz)
-	{
-		UStashBlueprint::HandleNetworkError();
-	}
-
-	JNIEXPORT void JNICALL Java_com_Plugins_Stash_StashHelper_nativeOnExternalPayment(JNIEnv* env, jclass clazz, jstring url)
-	{
-		FString UrlStr;
-		if (url)
-		{
-			const char* UTFString = env->GetStringUTFChars(url, nullptr);
-			if (UTFString)
-			{
-				UrlStr = FString(UTF8_TO_TCHAR(UTFString));
-				env->ReleaseStringUTFChars(url, UTFString);
-			}
-		}
-		UStashBlueprint::HandleExternalPayment(UrlStr);
-	}
-}
-#endif

@@ -158,8 +158,11 @@ struct FStashModalConfig
 /**
  * Stash Blueprint Function Library
  *
- * Provides cross-platform functions for integrating Stash Native (card, modal, browser)
- * into Unreal Engine projects on iOS and Android.
+ * Static nodes under the Stash category in Blueprint (Open Card, Open Modal, Get Stash Subsystem, etc.).
+ * Mobile-only at runtime: iOS and Android call into StashNative via Obj-C / JNI; other platforms log and no-op.
+ *
+ * Callbacks: use Get Stash Subsystem and bind to its events. Do not also bind legacy static delegates on this class.
+ * Implementation split: StashBlueprint.cpp (this API), StashBlueprintCallbacks.cpp (dispatch), platform callback .cpp files.
  */
 UCLASS()
 class STASH_API UStashBlueprint : public UBlueprintFunctionLibrary
@@ -168,6 +171,10 @@ class STASH_API UStashBlueprint : public UBlueprintFunctionLibrary
 
 public:
 	UStashBlueprint(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer) {};
+
+	// ========================================================================
+	// Config factories
+	// ========================================================================
 
 	/**
 	 * Builds a card config with all options. Use in Blueprint with Open Card With Config.
@@ -195,6 +202,10 @@ public:
 		float TabletHeightRatioLandscape = 0.65f,
 		FString BackgroundColor = TEXT("")
 	);
+
+	// ========================================================================
+	// Card presentation
+	// ========================================================================
 
 	/**
 	 * Opens the Stash card with default sizing (drawer on phones, centered on tablets).
@@ -236,6 +247,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Dismiss Card"))
 	static void DismissCard();
 
+	// ========================================================================
+	// System browser
+	// ========================================================================
+
 	/**
 	 * Opens the URL in the platform browser (SFSafariViewController on iOS, Chrome Custom Tabs on Android).
 	 * No in-app UI, no config, no callbacks.
@@ -252,7 +267,7 @@ public:
 	static void CloseBrowser();
 
 	// ========================================================================
-	// Modal Presentation (Stash Native 2.0)
+	// Modal presentation
 	// ========================================================================
 
 	/**
@@ -274,7 +289,7 @@ public:
 	static void OpenModalWithConfig(const FString& URL, const FStashModalConfig& Config);
 
 	// ========================================================================
-	// Configuration
+	// Platform configuration & Android checkout backdrop
 	// ========================================================================
 
 	/**
@@ -344,6 +359,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Capture Viewport For Android Checkout Backdrop", WorldContext = "WorldContextObject", Latent, LatentInfo = "LatentInfo"))
 	static void CaptureViewportForAndroidCheckoutBackdropLatent(UObject* WorldContextObject, TArray<uint8>& OutImageBytes, FLatentActionInfo LatentInfo);
 
+	// ========================================================================
+	// Callbacks (Blueprint + recommended C++)
+	// ========================================================================
+
 	/**
 	 * Returns the Stash Subsystem so you can bind to On Payment Success, On Dialog Dismissed, etc. in Blueprint.
 	 * In Blueprint: call "Get Stash Subsystem", then use "Assign [event]" or "Add [event]" on the returned object.
@@ -380,7 +399,7 @@ public:
 	static FOnStashExternalPayment OnExternalPayment;
 	
 	// ========================================================================
-	// Internal callback functions called from native code
+	// Internal — called from StashAndroidNativeCallbacks / StashIOSNativeCallbacks
 	// ========================================================================
 	static void HandlePaymentSuccess();
 	static void HandlePaymentFailure();
