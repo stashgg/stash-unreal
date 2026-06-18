@@ -30,11 +30,13 @@ class AndroidUtils
 {
 private:
   static bool m_supportedPlatform;
+  static bool bLoggedUninitializedWarning;
 
 public:
   static void Initialization()
   {
     m_supportedPlatform = true;
+    bLoggedUninitializedWarning = false;
     m_supportedPlatform = (bool)CallJavaCode<int>(
       "com/Plugins/Stash/StashInit",
       "Initialization",
@@ -48,16 +50,17 @@ public:
     }
     else
     {
-      UE_LOG(LogStash, Log, TEXT("[Stash] Android platform initialized successfully"));
+      UE_LOG(LogStash, Verbose, TEXT("[Stash] Android platform initialized successfully"));
     }
   }
 
   /** Check if the Android platform is properly initialized for JNI calls */
   static bool isSupportPlatform()
   {
-    if(!m_supportedPlatform)
+    if (!m_supportedPlatform && !bLoggedUninitializedWarning)
     {
-      UE_LOG(LogStash, Error, TEXT("[Stash] Android platform not initialized - JNI calls disabled"));
+      UE_LOG(LogStash, Warning, TEXT("[Stash] Android platform not initialized - JNI calls disabled"));
+      bLoggedUninitializedWarning = true;
     }
     return m_supportedPlatform;
   }
@@ -245,7 +248,7 @@ public:
     if (!m_supportedPlatform)
       return;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallJniVoidMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallJniVoidMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
     JNIEnv* Env = FAndroidApplication::GetJavaEnv();
     jclass Class = FAndroidApplication::FindJavaClass(ClassName);
@@ -270,7 +273,7 @@ public:
     if (!m_supportedPlatform)
       return TEXT("");
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallJniStringMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallJniStringMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
     JNIEnv* Env = FAndroidApplication::GetJavaEnv();
     jclass Class = FAndroidApplication::FindJavaClass(ClassName);
@@ -300,7 +303,7 @@ public:
     if (!m_supportedPlatform)
       return false;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallJniBoolMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallJniBoolMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
     JNIEnv* Env = FAndroidApplication::GetJavaEnv();
     jclass Class = FAndroidApplication::FindJavaClass(ClassName);
@@ -326,7 +329,7 @@ public:
     if (!m_supportedPlatform)
       return 0;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallJniIntMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallJniIntMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
     JNIEnv* Env = FAndroidApplication::GetJavaEnv();
     jclass Class = FAndroidApplication::FindJavaClass(ClassName);
@@ -352,7 +355,7 @@ public:
     if (!m_supportedPlatform)
       return 0;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallJniLongMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallJniLongMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
     JNIEnv* Env = FAndroidApplication::GetJavaEnv();
     jclass Class = FAndroidApplication::FindJavaClass(ClassName);
@@ -378,7 +381,7 @@ public:
     if (!m_supportedPlatform)
       return nullptr;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallJniObjectMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallJniObjectMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
     JNIEnv* Env = FAndroidApplication::GetJavaEnv();
     jclass Class = FAndroidApplication::FindJavaClass(ClassName);
@@ -407,7 +410,7 @@ public:
     if (!m_supportedPlatform)
       return nullptr;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallJniObjectArray [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallJniObjectArray [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
     JNIEnv* Env = FAndroidApplication::GetJavaEnv();
     jclass Class = FAndroidApplication::FindJavaClass(ClassName);
@@ -435,7 +438,7 @@ public:
     if (!m_supportedPlatform)
       return nullptr;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallJniFloatArrayMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallJniFloatArrayMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
     JNIEnv* Env = FAndroidApplication::GetJavaEnv();
     jclass Class = FAndroidApplication::FindJavaClass(ClassName);
@@ -461,7 +464,7 @@ public:
     if (!m_supportedPlatform)
       return nullptr;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallJniIntArrayMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallJniIntArrayMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
     JNIEnv* Env = FAndroidApplication::GetJavaEnv();
     jclass Class = FAndroidApplication::FindJavaClass(ClassName);
@@ -487,7 +490,7 @@ public:
     if (!m_supportedPlatform)
       return nullptr;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallJniLongArrayMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallJniLongArrayMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
     JNIEnv* Env = FAndroidApplication::GetJavaEnv();
     jclass Class = FAndroidApplication::FindJavaClass(ClassName);
@@ -515,7 +518,7 @@ public:
     if (!m_supportedPlatform)
       return;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallObjectJniVoidMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallObjectJniVoidMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
     if (!object)
       UE_LOG(LogStash, Error, TEXT("Stash -> Err: jobject = null  [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
@@ -542,7 +545,7 @@ public:
     if (!m_supportedPlatform)
       return TEXT("");
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallObjectJniStringMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallObjectJniStringMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
     if (!object)
       UE_LOG(LogStash, Error, TEXT("Stash -> Err: jobject = null  [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
@@ -574,7 +577,7 @@ public:
     if (!m_supportedPlatform)
       return false;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallObjectJniBoolMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallObjectJniBoolMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
     if (!object)
       UE_LOG(LogStash, Error, TEXT("Stash -> Err: jobject = null  [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
@@ -602,7 +605,7 @@ public:
     if (!m_supportedPlatform)
       return 0;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallObjectJniIntMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallObjectJniIntMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
     if (!object)
       UE_LOG(LogStash, Error, TEXT("Stash -> Err: jobject = null  [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
@@ -630,7 +633,7 @@ public:
     if (!m_supportedPlatform)
       return 0;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallObjectJniLongMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallObjectJniLongMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
     if (!object)
       UE_LOG(LogStash, Error, TEXT("Stash -> Err: jobject = null  [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
@@ -658,7 +661,7 @@ public:
     if (!m_supportedPlatform)
       return nullptr;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallObjectJniObjectMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallObjectJniObjectMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
     if (!object)
       UE_LOG(LogStash, Error, TEXT("Stash -> Err: jobject = null  [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
@@ -689,7 +692,7 @@ public:
     if (!m_supportedPlatform)
       return nullptr;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallObjectJniObjectArrayMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallObjectJniObjectArrayMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
     if (!object)
       UE_LOG(LogStash, Error, TEXT("Stash -> Err: jobject = null  [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
@@ -719,7 +722,7 @@ public:
     if (!m_supportedPlatform)
       return nullptr;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallObjectJniFloatArrayMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallObjectJniFloatArrayMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
     if (!object)
       UE_LOG(LogStash, Error, TEXT("Stash -> Err: jobject = null  [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
@@ -747,7 +750,7 @@ public:
     if (!m_supportedPlatform)
       return nullptr;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallObjectJniIntArrayMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallObjectJniIntArrayMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
     if (!object)
       UE_LOG(LogStash, Error, TEXT("Stash -> Err: jobject = null  [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
@@ -775,7 +778,7 @@ public:
     if (!m_supportedPlatform)
       return nullptr;
 
-    UE_LOG(LogStash, Log, TEXT("Stash -> Method CallObjectJniLongArrayMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
+    UE_LOG(LogStash, Verbose, TEXT("Stash -> Method CallObjectJniLongArrayMethod [%s][%s]"), *FString(MethodName), *FString(MethodSignature));
 
     if (!object)
       UE_LOG(LogStash, Error, TEXT("Stash -> Err: jobject = null  [%s][%s]"), *FString(MethodName), *FString(MethodSignature));

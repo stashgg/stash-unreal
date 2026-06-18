@@ -5,3 +5,4 @@
 
 // Static member initialization
 bool AndroidUtils::m_supportedPlatform = false;
+bool AndroidUtils::bLoggedUninitializedWarning = false;
