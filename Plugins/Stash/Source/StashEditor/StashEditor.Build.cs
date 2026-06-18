@@ -1,4 +1,6 @@
 // Copyright Stash. All Rights Reserved.
+// Editor-only module: Blueprint graph UX for Stash (e.g. slider pins on modal config ratios).
+// Keeps UnrealEd / GraphEditor dependencies out of the runtime Stash module.
 
 using UnrealBuildTool;
 

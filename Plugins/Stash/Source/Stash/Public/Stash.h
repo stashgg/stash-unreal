@@ -21,7 +21,7 @@ public:
 	virtual void ShutdownModule() override;
 
 	/** Initialize platform-specific components */
-	void Initialization();
+	void Initialize();
 
 	/** Check if the current platform supports Stash Native */
 	static bool IsSupported();

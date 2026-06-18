@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Pay Unreal Engine SDK - Java Type Conversion Utilities
+// Stash Unreal Engine SDK - Java Type Conversion Utilities
 
 #pragma once
 

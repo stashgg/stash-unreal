@@ -33,13 +33,13 @@ private:
   static bool bLoggedUninitializedWarning;
 
 public:
-  static void Initialization()
+  static void Initialize()
   {
     m_supportedPlatform = true;
     bLoggedUninitializedWarning = false;
     m_supportedPlatform = (bool)CallJavaCode<int>(
       "com/Plugins/Stash/StashInit",
-      "Initialization",
+      "initialize",
       "",
       false
     );
@@ -55,7 +55,7 @@ public:
   }
 
   /** Check if the Android platform is properly initialized for JNI calls */
-  static bool isSupportPlatform()
+  static bool IsPlatformSupported()
   {
     if (!m_supportedPlatform && !bLoggedUninitializedWarning)
     {

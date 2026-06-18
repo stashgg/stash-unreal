@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Pay Unreal Engine SDK - Android JNI Utilities Implementation
+// Stash Unreal Engine SDK - Android JNI Utilities Implementation
 
 #include "AndroidUtils.h"
 

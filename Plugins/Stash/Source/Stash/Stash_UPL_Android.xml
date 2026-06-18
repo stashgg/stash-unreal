@@ -183,7 +183,7 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
       // Stash Native SDK - pre-built AAR (see gradleCopies StashNative-*.aar → libs/StashNative.aar)
       implementation(name: 'StashNative', ext: 'aar')
       
-      // Dependencies required by Stash Pay SDK
+      // Dependencies required by Stash Native SDK
       implementation 'androidx.browser:browser:1.7.0'
       implementation 'androidx.webkit:webkit:1.5.0'
       }

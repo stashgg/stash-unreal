@@ -414,7 +414,7 @@ void UStashBlueprint::SetAndroidKeepAliveConfig(const FStashKeepAliveConfig& Con
 void UStashBlueprint::SetAndroidCheckoutBackdropBytes(const TArray<uint8>& ImageBytes)
 {
 #if PLATFORM_ANDROID
-	if (!AndroidUtils::isSupportPlatform())
+	if (!AndroidUtils::IsPlatformSupported())
 	{
 		UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] SetAndroidCheckoutBackdropBytes: AndroidUtils platform not ready (JNI init failed?)"));
 		return;
@@ -435,7 +435,7 @@ void UStashBlueprint::SetAndroidCheckoutBackdropBytes(const TArray<uint8>& Image
 void UStashBlueprint::ClearAndroidCheckoutBackdrop()
 {
 #if PLATFORM_ANDROID
-	if (!AndroidUtils::isSupportPlatform())
+	if (!AndroidUtils::IsPlatformSupported())
 	{
 		UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] ClearAndroidCheckoutBackdrop: AndroidUtils platform not ready"));
 		return;

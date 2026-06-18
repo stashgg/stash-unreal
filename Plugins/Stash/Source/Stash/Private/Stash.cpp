@@ -14,7 +14,7 @@ DEFINE_LOG_CATEGORY(LogStash);
 
 void FStashModule::StartupModule()
 {
-	Initialization();
+	Initialize();
 }
 
 void FStashModule::ShutdownModule()
@@ -24,10 +24,10 @@ void FStashModule::ShutdownModule()
 	// Android: StashNativeCard is a singleton managed by the SDK
 }
 
-void FStashModule::Initialization()
+void FStashModule::Initialize()
 {
 #if PLATFORM_ANDROID
-	AndroidUtils::Initialization();
+	AndroidUtils::Initialize();
 #endif
 
 #if PLATFORM_IOS
@@ -38,7 +38,7 @@ void FStashModule::Initialization()
 bool FStashModule::IsSupported()
 {
 #if PLATFORM_ANDROID
-	return AndroidUtils::isSupportPlatform();
+	return AndroidUtils::IsPlatformSupported();
 #elif PLATFORM_IOS
 	return true;
 #else
