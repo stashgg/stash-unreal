@@ -3,7 +3,7 @@
 // Android force-portrait checkout: read back the game viewport on the render thread, encode JPEG,
 // retry until the swapchain/backbuffer is ready (see StashBackdropMaxCaptureAttempts).
 
-#include "Android/StashAndroidBackdropCapture.h"
+#include "StashAndroidBackdropCapture.h"
 #include "Stash.h"
 #include "Async/Async.h"
 

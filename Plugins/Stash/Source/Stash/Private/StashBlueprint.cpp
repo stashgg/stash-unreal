@@ -2,11 +2,11 @@
 //
 // Blueprint-facing Stash API (UStashBlueprint): open card/modal/browser, configs, and Android backdrop helpers.
 // Native callbacks and subsystem resolution live in StashBlueprintCallbacks.cpp.
-// Viewport capture implementation lives in Android/StashAndroidBackdropCapture.cpp.
+// Viewport capture implementation lives in StashAndroidBackdropCapture.cpp.
 
 #include "StashBlueprint.h"
 #include "Stash.h"
-#include "Android/StashAndroidBackdropCapture.h"
+#include "StashAndroidBackdropCapture.h"
 
 #if PLATFORM_ANDROID
 #include "Android/Utils/AndroidUtils.h"
@@ -15,6 +15,40 @@
 #if PLATFORM_IOS
 #include "IOS/ObjC/StashNativeCardWrapper.h"
 #endif
+
+namespace
+{
+	constexpr float StashRatioMin = 0.1f;
+	constexpr float StashRatioMax = 1.0f;
+
+	float ClampStashRatio(float Ratio)
+	{
+		return FMath::Clamp(Ratio, StashRatioMin, StashRatioMax);
+	}
+
+	void ClampCardConfigRatios(FStashCardConfig& Config)
+	{
+		Config.CardHeightRatioPortrait = ClampStashRatio(Config.CardHeightRatioPortrait);
+		Config.CardWidthRatioLandscape = ClampStashRatio(Config.CardWidthRatioLandscape);
+		Config.CardHeightRatioLandscape = ClampStashRatio(Config.CardHeightRatioLandscape);
+		Config.TabletWidthRatioPortrait = ClampStashRatio(Config.TabletWidthRatioPortrait);
+		Config.TabletHeightRatioPortrait = ClampStashRatio(Config.TabletHeightRatioPortrait);
+		Config.TabletWidthRatioLandscape = ClampStashRatio(Config.TabletWidthRatioLandscape);
+		Config.TabletHeightRatioLandscape = ClampStashRatio(Config.TabletHeightRatioLandscape);
+	}
+
+	void ClampModalConfigRatios(FStashModalConfig& Config)
+	{
+		Config.PhoneWidthRatioPortrait = ClampStashRatio(Config.PhoneWidthRatioPortrait);
+		Config.PhoneHeightRatioPortrait = ClampStashRatio(Config.PhoneHeightRatioPortrait);
+		Config.PhoneWidthRatioLandscape = ClampStashRatio(Config.PhoneWidthRatioLandscape);
+		Config.PhoneHeightRatioLandscape = ClampStashRatio(Config.PhoneHeightRatioLandscape);
+		Config.TabletWidthRatioPortrait = ClampStashRatio(Config.TabletWidthRatioPortrait);
+		Config.TabletHeightRatioPortrait = ClampStashRatio(Config.TabletHeightRatioPortrait);
+		Config.TabletWidthRatioLandscape = ClampStashRatio(Config.TabletWidthRatioLandscape);
+		Config.TabletHeightRatioLandscape = ClampStashRatio(Config.TabletHeightRatioLandscape);
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Config factories (Blueprint "Make" nodes)
@@ -34,13 +68,39 @@ FStashCardConfig UStashBlueprint::MakeStashCardConfig(
 	FStashCardConfig Config;
 	Config.bForcePortrait = bForcePortrait;
 	Config.BackgroundColor = MoveTemp(BackgroundColor);
-	Config.CardHeightRatioPortrait = FMath::Clamp(CardHeightRatioPortrait, 0.1f, 1.0f);
-	Config.CardWidthRatioLandscape = FMath::Clamp(CardWidthRatioLandscape, 0.1f, 1.0f);
-	Config.CardHeightRatioLandscape = FMath::Clamp(CardHeightRatioLandscape, 0.1f, 1.0f);
-	Config.TabletWidthRatioPortrait = FMath::Clamp(TabletWidthRatioPortrait, 0.1f, 1.0f);
-	Config.TabletHeightRatioPortrait = FMath::Clamp(TabletHeightRatioPortrait, 0.1f, 1.0f);
-	Config.TabletWidthRatioLandscape = FMath::Clamp(TabletWidthRatioLandscape, 0.1f, 1.0f);
-	Config.TabletHeightRatioLandscape = FMath::Clamp(TabletHeightRatioLandscape, 0.1f, 1.0f);
+	Config.CardHeightRatioPortrait = ClampStashRatio(CardHeightRatioPortrait);
+	Config.CardWidthRatioLandscape = ClampStashRatio(CardWidthRatioLandscape);
+	Config.CardHeightRatioLandscape = ClampStashRatio(CardHeightRatioLandscape);
+	Config.TabletWidthRatioPortrait = ClampStashRatio(TabletWidthRatioPortrait);
+	Config.TabletHeightRatioPortrait = ClampStashRatio(TabletHeightRatioPortrait);
+	Config.TabletWidthRatioLandscape = ClampStashRatio(TabletWidthRatioLandscape);
+	Config.TabletHeightRatioLandscape = ClampStashRatio(TabletHeightRatioLandscape);
+	return Config;
+}
+
+FStashModalConfig UStashBlueprint::MakeStashModalConfig(
+	bool bAllowDismiss,
+	float PhoneWidthRatioPortrait,
+	float PhoneHeightRatioPortrait,
+	float PhoneWidthRatioLandscape,
+	float PhoneHeightRatioLandscape,
+	float TabletWidthRatioPortrait,
+	float TabletHeightRatioPortrait,
+	float TabletWidthRatioLandscape,
+	float TabletHeightRatioLandscape,
+	FString BackgroundColor)
+{
+	FStashModalConfig Config;
+	Config.bAllowDismiss = bAllowDismiss;
+	Config.BackgroundColor = MoveTemp(BackgroundColor);
+	Config.PhoneWidthRatioPortrait = ClampStashRatio(PhoneWidthRatioPortrait);
+	Config.PhoneHeightRatioPortrait = ClampStashRatio(PhoneHeightRatioPortrait);
+	Config.PhoneWidthRatioLandscape = ClampStashRatio(PhoneWidthRatioLandscape);
+	Config.PhoneHeightRatioLandscape = ClampStashRatio(PhoneHeightRatioLandscape);
+	Config.TabletWidthRatioPortrait = ClampStashRatio(TabletWidthRatioPortrait);
+	Config.TabletHeightRatioPortrait = ClampStashRatio(TabletHeightRatioPortrait);
+	Config.TabletWidthRatioLandscape = ClampStashRatio(TabletWidthRatioLandscape);
+	Config.TabletHeightRatioLandscape = ClampStashRatio(TabletHeightRatioLandscape);
 	return Config;
 }
 
@@ -91,41 +151,43 @@ void UStashBlueprint::OpenCardWithConfig(const FString& URL, const FStashCardCon
 		UE_LOG(LogStash, Warning, TEXT("[Stash] OpenCardWithConfig called with empty URL"));
 		return;
 	}
+	FStashCardConfig SafeConfig = Config;
+	ClampCardConfigRatios(SafeConfig);
 #if PLATFORM_IOS
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card with config on iOS: %s"), *URL);
 	StashNativeCardWrapper* wrapper = [StashNativeCardWrapper sharedInstance];
-	NSString* bgColor = Config.BackgroundColor.IsEmpty() ? nil : Config.BackgroundColor.GetNSString();
+	NSString* bgColor = SafeConfig.BackgroundColor.IsEmpty() ? nil : SafeConfig.BackgroundColor.GetNSString();
 	[wrapper openCardWithURL:URL.GetNSString()
-		forcePortrait:Config.bForcePortrait
-		cardHeightRatioPortrait:FMath::Clamp(Config.CardHeightRatioPortrait, 0.1f, 1.0f)
-		cardWidthRatioLandscape:FMath::Clamp(Config.CardWidthRatioLandscape, 0.1f, 1.0f)
-		cardHeightRatioLandscape:FMath::Clamp(Config.CardHeightRatioLandscape, 0.1f, 1.0f)
-		tabletWidthRatioPortrait:FMath::Clamp(Config.TabletWidthRatioPortrait, 0.1f, 1.0f)
-		tabletHeightRatioPortrait:FMath::Clamp(Config.TabletHeightRatioPortrait, 0.1f, 1.0f)
-		tabletWidthRatioLandscape:FMath::Clamp(Config.TabletWidthRatioLandscape, 0.1f, 1.0f)
-		tabletHeightRatioLandscape:FMath::Clamp(Config.TabletHeightRatioLandscape, 0.1f, 1.0f)
+		forcePortrait:SafeConfig.bForcePortrait
+		cardHeightRatioPortrait:SafeConfig.CardHeightRatioPortrait
+		cardWidthRatioLandscape:SafeConfig.CardWidthRatioLandscape
+		cardHeightRatioLandscape:SafeConfig.CardHeightRatioLandscape
+		tabletWidthRatioPortrait:SafeConfig.TabletWidthRatioPortrait
+		tabletHeightRatioPortrait:SafeConfig.TabletHeightRatioPortrait
+		tabletWidthRatioLandscape:SafeConfig.TabletWidthRatioLandscape
+		tabletHeightRatioLandscape:SafeConfig.TabletHeightRatioLandscape
 		backgroundColor:bgColor];
 #elif PLATFORM_ANDROID
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card with config on Android: %s"), *URL);
-	const int32 BackdropLen = Config.AndroidCheckoutBackdrop.Num();
+	const int32 BackdropLen = SafeConfig.AndroidCheckoutBackdrop.Num();
 	UE_LOG(LogStash, Log, TEXT("[StashBackdrop] OpenCardWithConfig: forcePortrait=%d backdropBytes=%d"),
-		Config.bForcePortrait ? 1 : 0, BackdropLen);
+		SafeConfig.bForcePortrait ? 1 : 0, BackdropLen);
 	AndroidUtils::CallJavaCode<void>(
 		"com/Plugins/Stash/StashHelper",
 		"OpenCardWithConfig",
 		"",
 		true,
 		URL,
-		Config.bForcePortrait,
-		FMath::Clamp(Config.CardHeightRatioPortrait, 0.1f, 1.0f),
-		FMath::Clamp(Config.CardWidthRatioLandscape, 0.1f, 1.0f),
-		FMath::Clamp(Config.CardHeightRatioLandscape, 0.1f, 1.0f),
-		FMath::Clamp(Config.TabletWidthRatioPortrait, 0.1f, 1.0f),
-		FMath::Clamp(Config.TabletHeightRatioPortrait, 0.1f, 1.0f),
-		FMath::Clamp(Config.TabletWidthRatioLandscape, 0.1f, 1.0f),
-		FMath::Clamp(Config.TabletHeightRatioLandscape, 0.1f, 1.0f),
-		Config.BackgroundColor,
-		Config.AndroidCheckoutBackdrop
+		SafeConfig.bForcePortrait,
+		SafeConfig.CardHeightRatioPortrait,
+		SafeConfig.CardWidthRatioLandscape,
+		SafeConfig.CardHeightRatioLandscape,
+		SafeConfig.TabletWidthRatioPortrait,
+		SafeConfig.TabletHeightRatioPortrait,
+		SafeConfig.TabletWidthRatioLandscape,
+		SafeConfig.TabletHeightRatioLandscape,
+		SafeConfig.BackgroundColor,
+		SafeConfig.AndroidCheckoutBackdrop
 	);
 #else
 	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenCardWithConfig called on unsupported platform"));
@@ -259,19 +321,21 @@ void UStashBlueprint::OpenModalWithConfig(const FString& URL, const FStashModalC
 		UE_LOG(LogStash, Warning, TEXT("[Stash] OpenModalWithConfig called with empty URL"));
 		return;
 	}
+	FStashModalConfig SafeConfig = Config;
+	ClampModalConfigRatios(SafeConfig);
 #if PLATFORM_IOS
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening modal with config on iOS: %s"), *URL);
-	NSString* modalBg = Config.BackgroundColor.IsEmpty() ? nil : Config.BackgroundColor.GetNSString();
+	NSString* modalBg = SafeConfig.BackgroundColor.IsEmpty() ? nil : SafeConfig.BackgroundColor.GetNSString();
 	[[StashNativeCardWrapper sharedInstance] openModalWithURL:URL.GetNSString()
-		allowDismiss:Config.bAllowDismiss
-		phoneWidthRatioPortrait:Config.PhoneWidthRatioPortrait
-		phoneHeightRatioPortrait:Config.PhoneHeightRatioPortrait
-		phoneWidthRatioLandscape:Config.PhoneWidthRatioLandscape
-		phoneHeightRatioLandscape:Config.PhoneHeightRatioLandscape
-		tabletWidthRatioPortrait:Config.TabletWidthRatioPortrait
-		tabletHeightRatioPortrait:Config.TabletHeightRatioPortrait
-		tabletWidthRatioLandscape:Config.TabletWidthRatioLandscape
-		tabletHeightRatioLandscape:Config.TabletHeightRatioLandscape
+		allowDismiss:SafeConfig.bAllowDismiss
+		phoneWidthRatioPortrait:SafeConfig.PhoneWidthRatioPortrait
+		phoneHeightRatioPortrait:SafeConfig.PhoneHeightRatioPortrait
+		phoneWidthRatioLandscape:SafeConfig.PhoneWidthRatioLandscape
+		phoneHeightRatioLandscape:SafeConfig.PhoneHeightRatioLandscape
+		tabletWidthRatioPortrait:SafeConfig.TabletWidthRatioPortrait
+		tabletHeightRatioPortrait:SafeConfig.TabletHeightRatioPortrait
+		tabletWidthRatioLandscape:SafeConfig.TabletWidthRatioLandscape
+		tabletHeightRatioLandscape:SafeConfig.TabletHeightRatioLandscape
 		backgroundColor:modalBg];
 #elif PLATFORM_ANDROID
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening modal with config on Android: %s"), *URL);
@@ -281,16 +345,16 @@ void UStashBlueprint::OpenModalWithConfig(const FString& URL, const FStashModalC
 		"",
 		true,
 		URL,
-		Config.bAllowDismiss,
-		Config.PhoneWidthRatioPortrait,
-		Config.PhoneHeightRatioPortrait,
-		Config.PhoneWidthRatioLandscape,
-		Config.PhoneHeightRatioLandscape,
-		Config.TabletWidthRatioPortrait,
-		Config.TabletHeightRatioPortrait,
-		Config.TabletWidthRatioLandscape,
-		Config.TabletHeightRatioLandscape,
-		Config.BackgroundColor
+		SafeConfig.bAllowDismiss,
+		SafeConfig.PhoneWidthRatioPortrait,
+		SafeConfig.PhoneHeightRatioPortrait,
+		SafeConfig.PhoneWidthRatioLandscape,
+		SafeConfig.PhoneHeightRatioLandscape,
+		SafeConfig.TabletWidthRatioPortrait,
+		SafeConfig.TabletHeightRatioPortrait,
+		SafeConfig.TabletWidthRatioLandscape,
+		SafeConfig.TabletHeightRatioLandscape,
+		SafeConfig.BackgroundColor
 	);
 #else
 	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenModalWithConfig called on unsupported platform"));

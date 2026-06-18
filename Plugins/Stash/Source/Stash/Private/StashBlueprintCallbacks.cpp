@@ -5,7 +5,8 @@
 // (Blueprint/C++ recommended) and on legacy static UStashBlueprint delegates (C++ backward compat).
 // Bind to one path only — binding both fires your handler twice.
 
-#include "StashBlueprint.h"#include "Stash.h"
+#include "StashBlueprint.h"
+#include "Stash.h"
 #include "StashSubsystem.h"
 #include "Async/Async.h"
 #include "Engine/Engine.h"

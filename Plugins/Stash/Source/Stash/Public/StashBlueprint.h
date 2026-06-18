@@ -64,31 +64,31 @@ struct FStashCardConfig
 	bool bForcePortrait = false;
 
 	/** Phone card height ratio for portrait (0.1-1.0). Default 0.68. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float CardHeightRatioPortrait = 0.68f;
 
 	/** Phone card width ratio for landscape (0.1-1.0). Used when bForcePortrait is false. Default 0.9. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float CardWidthRatioLandscape = 0.9f;
 
 	/** Phone card height ratio for landscape (0.1-1.0). Used when bForcePortrait is false. Default 0.6. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float CardHeightRatioLandscape = 0.6f;
 
 	/** Tablet width ratio for portrait (0.1-1.0). Default 0.6. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float TabletWidthRatioPortrait = 0.6f;
 
 	/** Tablet height ratio for portrait (0.1-1.0). Default 0.8. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float TabletHeightRatioPortrait = 0.8f;
 
 	/** Tablet width ratio for landscape (0.1-1.0). Default 0.8. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float TabletWidthRatioLandscape = 0.8f;
 
 	/** Tablet height ratio for landscape (0.1-1.0). Default 0.65. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float TabletHeightRatioLandscape = 0.65f;
 
 	/** Optional shell background color as HTML hex (e.g. "#RRGGBB"). Leave empty for SDK default light/dark. */
@@ -119,35 +119,35 @@ struct FStashModalConfig
 	bool bAllowDismiss = true;
 
 	/** Phone width ratio for portrait (0.1-1.0). Default 0.9. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float PhoneWidthRatioPortrait = 0.9f;
 
 	/** Phone height ratio for portrait (0.1-1.0). Default 0.7. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float PhoneHeightRatioPortrait = 0.7f;
 
 	/** Phone width ratio for landscape (0.1-1.0). Default 0.7. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float PhoneWidthRatioLandscape = 0.7f;
 
 	/** Phone height ratio for landscape (0.1-1.0). Default 0.85. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float PhoneHeightRatioLandscape = 0.85f;
 
 	/** Tablet width ratio for portrait (0.1-1.0). Default 0.6. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float TabletWidthRatioPortrait = 0.6f;
 
 	/** Tablet height ratio for portrait (0.1-1.0). Default 0.7. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float TabletHeightRatioPortrait = 0.7f;
 
 	/** Tablet width ratio for landscape (0.1-1.0). Default 0.5. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float TabletWidthRatioLandscape = 0.5f;
 
 	/** Tablet height ratio for landscape (0.1-1.0). Default 0.8. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float TabletHeightRatioLandscape = 0.8f;
 
 	/** Optional shell background color as HTML hex (e.g. "#RRGGBB"). Leave empty for SDK default light/dark. */
@@ -193,13 +193,42 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Make Stash Card Config"))
 	static FStashCardConfig MakeStashCardConfig(
 		bool bForcePortrait,
-		float CardHeightRatioPortrait,
-		float CardWidthRatioLandscape,
-		float CardHeightRatioLandscape,
-		float TabletWidthRatioPortrait = 0.6f,
-		float TabletHeightRatioPortrait = 0.8f,
-		float TabletWidthRatioLandscape = 0.8f,
-		float TabletHeightRatioLandscape = 0.65f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float CardHeightRatioPortrait,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float CardWidthRatioLandscape,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float CardHeightRatioLandscape,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float TabletWidthRatioPortrait = 0.6f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float TabletHeightRatioPortrait = 0.8f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float TabletWidthRatioLandscape = 0.8f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float TabletHeightRatioLandscape = 0.65f,
+		FString BackgroundColor = TEXT("")
+	);
+
+	/**
+	 * Builds a modal config with all options. Use in Blueprint with Open Modal With Config.
+	 * Ratio inputs are clamped to 0.1–1.0 (same validation as Open Modal With Config).
+	 *
+	 * @param bAllowDismiss Whether tap outside and drag gestures can dismiss the modal.
+	 * @param PhoneWidthRatioPortrait Phone width in portrait (0.1-1.0).
+	 * @param PhoneHeightRatioPortrait Phone height in portrait (0.1-1.0).
+	 * @param PhoneWidthRatioLandscape Phone width in landscape (0.1-1.0).
+	 * @param PhoneHeightRatioLandscape Phone height in landscape (0.1-1.0).
+	 * @param TabletWidthRatioPortrait Tablet width in portrait (0.1-1.0).
+	 * @param TabletHeightRatioPortrait Tablet height in portrait (0.1-1.0).
+	 * @param TabletWidthRatioLandscape Tablet width in landscape (0.1-1.0).
+	 * @param TabletHeightRatioLandscape Tablet height in landscape (0.1-1.0).
+	 * @param BackgroundColor Optional HTML hex shell color (e.g. "#RRGGBB"); leave empty for SDK default.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Make Stash Modal Config"))
+	static FStashModalConfig MakeStashModalConfig(
+		bool bAllowDismiss = true,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float PhoneWidthRatioPortrait = 0.9f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float PhoneHeightRatioPortrait = 0.7f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float PhoneWidthRatioLandscape = 0.7f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float PhoneHeightRatioLandscape = 0.85f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float TabletWidthRatioPortrait = 0.6f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float TabletHeightRatioPortrait = 0.7f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float TabletWidthRatioLandscape = 0.5f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float TabletHeightRatioLandscape = 0.8f,
 		FString BackgroundColor = TEXT("")
 	);
 
@@ -283,7 +312,7 @@ public:
 	 * Opens a URL in a centered modal dialog with custom configuration.
 	 *
 	 * @param URL The URL to load in the modal
-	 * @param Config Configuration for sizing, drag bar, and dismiss behavior
+	 * @param Config Configuration for sizing, drag bar, and dismiss behavior (use Make Stash Modal Config)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Open Modal With Config"))
 	static void OpenModalWithConfig(const FString& URL, const FStashModalConfig& Config);

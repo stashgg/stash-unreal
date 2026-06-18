@@ -14,6 +14,8 @@ public class Stash : ModuleRules
 	public Stash(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+		// Small module with split platform .cpp files; unity + adaptive git builds can omit unchanged subfolder sources.
+		bUseUnity = false;
 
 		PublicIncludePaths.AddRange(new string[] { Path.Combine(ModuleDirectory, "Public") });
 		PrivateIncludePaths.AddRange(new string[] { Path.Combine(ModuleDirectory, "Private") });

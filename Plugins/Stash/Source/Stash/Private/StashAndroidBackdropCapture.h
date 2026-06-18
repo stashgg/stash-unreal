@@ -1,5 +1,6 @@
 // Copyright Stash. All Rights Reserved.
 // Android checkout backdrop — viewport readback and JPEG encode.
+// Lives under Private/ (not Private/Android/) so editor Win64 builds link the non-Android stubs.
 
 #pragma once
 

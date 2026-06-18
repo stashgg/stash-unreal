@@ -20,6 +20,11 @@
 			"Name": "Stash",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "StashEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
 		}
 	]
 }
