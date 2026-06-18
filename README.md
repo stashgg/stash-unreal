@@ -195,6 +195,99 @@ Custom notification icons require **StashNative-2.2.0+** in `ThirdParty/Android/
 
 ---
 
+### Android build integration (`Stash_UPL_Android.xml`)
+
+When you **Package Project** for Android, Unreal runs plugin UPL scripts. The Stash plugin’s **`Plugins/Stash/Source/Stash/Stash_UPL_Android.xml`** changes the generated Gradle project under **`Intermediate/Android/…/gradle/`** (not your C++ `Source/` tree). Integrators auditing builds or merging custom Gradle snippets should know what it does.
+
+#### AndroidX Java source rewrite (runs on every package)
+
+In **`baseBuildGradleAdditions`**, the plugin registers a Gradle **`beforeEvaluate`** hook that:
+
+1. Walks **every `.java` file** under the generated Android Gradle **`rootProject`** directory.
+2. For each file, if the text contains a legacy **Android Support Library** import or type name, replaces it in place with the matching **AndroidX** string (e.g. `android.support.v4.app.ActivityCompat` → `androidx.core.app.ActivityCompat`).
+3. Prints a line per change, e.g. `Updating android.support… to androidx… in file …` in the package log.
+
+This is **intentional**: UE’s copied `GameActivity.java` and some engine/plugin Java still reference old `android.support.*` symbols while Stash Native and its dependencies expect **AndroidX** (`android.useAndroidX=true` / `android.enableJetifier=true` are also set in **`gradleProperties`**). The rewrite happens on the **generated** tree under `Intermediate/`; a clean package regenerates those files from UE templates.
+
+**Implications:**
+
+- You may see many `Updating … in file …` lines during Android packaging — that is normal.
+- If **your project** adds custom `.java` under the Android Gradle tree (unusual in pure UE games) and those files still contain the mapped legacy strings, they will be rewritten too.
+- The mapping is a fixed list in the UPL (Support annotations, `NotificationCompat`, `ActivityCompat`, `ContextCompat`, lifecycle arch classes, etc.) — not a full Jetifier pass.
+
+#### Gradle dependencies and pins (`buildGradleAdditions`)
+
+The plugin also adds Maven dependencies required by **Stash Native** and keep-alive, including:
+
+| Dependency | Purpose |
+|------------|---------|
+| `StashNative` AAR (`flatDir` / `libs/`) | Pre-built stash-native Android SDK |
+| `androidx.core:core:1.13.1` | `ServiceCompat.startForeground(…, int)` for keep-alive (see **Android keep-alive** above) |
+| `androidx.browser`, `androidx.webkit` | Required by stash-native |
+| `androidx.work:work-runtime` | WorkManager used by SDK / keep-alive paths |
+| `okhttp` 3.12.x, `guava`, Play `review` | Transitive / SDK-related pins |
+| Kotlin `1.8.22` resolution | Avoids duplicate Kotlin stdlib classes when Core 1.13.x is pinned |
+
+See **Android keep-alive service** for which lines you can remove if you never enable keep-alive.
+
+#### Manifest permissions & privacy review (`androidManifestUpdates`)
+
+The plugin UPL **merges or adjusts** these Android manifest permissions in your packaged APK. List them in privacy policies, Play **Data safety**, and App Store privacy questionnaires as applicable.
+
+| Permission | UPL action | Why / notes |
+|------------|------------|-------------|
+| `com.google.android.gms.permission.AD_ID` | **Added** | Advertising ID access (Android 13+ declaration). Required for some analytics / attribution stacks bundled with payment or SDK dependencies. **Disclose** if you publish to Google Play. |
+| `android.permission.WRITE_EXTERNAL_STORAGE` | **Removed**, then re-added with `maxSdkVersion="32"` | Legacy scoped storage write; capped to API ≤ 32. |
+| `android.permission.READ_EXTERNAL_STORAGE` | **Added** with `minSdkVersion="33"` | Read storage on newer API levels where the legacy write permission no longer applies. |
+
+**Also expect (not always from this UPL alone):**
+
+- **`INTERNET`** — required for Stash checkout / webshop URLs (typically from UE base manifest and/or **StashNative** AAR merge). Verify the merged manifest in `Intermediate/Android/…` or the built APK.
+- **Foreground service / notification permissions** — if you enable **Android keep-alive**, the **StashNative** AAR merges service entries and related permissions; audit the merged manifest when keep-alive is on.
+
+To change permissions, edit **`androidManifestUpdates`** in **`Stash_UPL_Android.xml`** (or override via your own game UPL — test merged output carefully).
+
+#### Third-party libraries & ProGuard (`buildGradleAdditions` / `proguardAdditions`)
+
+**Gradle `implementation` lines** added by the plugin (in addition to the **StashNative** AAR):
+
+| Artifact | Version (pinned in UPL) | Typical use |
+|----------|-------------------------|-------------|
+| `com.squareup.okhttp3:okhttp` | 3.12.13 | HTTP client (SDK / network) |
+| `com.squareup.okhttp3:okhttp-urlconnection` | 3.12.13 | OkHttp URL connection support |
+| `com.google.android.play:review` | 2.0.1 | Google Play In-App Review API |
+| `com.google.guava:guava` | 28.2-android | Guava utilities (SDK transitive pin) |
+| `androidx.annotation:annotation` | 1.0.0 | AndroidX annotations |
+| `androidx.core:core` | 1.13.1 | Core AndroidX (keep-alive `ServiceCompat`; optional — see keep-alive section) |
+| `androidx.work:work-runtime` | 2.7.1 | WorkManager |
+| `androidx.browser:browser` | 1.7.0 | Chrome Custom Tabs (in-app browser flows) |
+| `androidx.webkit:webkit` | 1.5.0 | WebView / checkout web content |
+
+**ProGuard / R8** rules appended by the plugin:
+
+| Rule | Keeps |
+|------|--------|
+| `com.Plugins.Stash.**` | Stash UE JNI bridge (`StashHelper`, `StashInit`) |
+| `com.stash.**` | Stash Native SDK classes |
+| `androidx.**` | AndroidX (dontwarn + keep) |
+| `com.facebook.**` | Facebook SDK classes referenced by stash-native / payment stack — **disclose** if your privacy review tracks Facebook/Meta SDK data collection |
+
+`minifyEnabled` is set **false** for the app `release` build type in this UPL snippet; the keep rules still apply if you enable minification elsewhere.
+
+#### Other UPL hooks (short)
+
+| Hook | Effect |
+|------|--------|
+| **`prebuildCopies`** | Copies `StashHelper.java` / `StashInit.java` into the Gradle tree |
+| **`gradleCopies`** | Copies `ThirdParty/Android/StashNative-*.aar` → `libs/StashNative.aar` |
+| **`proguardAdditions`** | Keeps `com.Plugins.Stash.**`, `com.stash.**`, `androidx.**`, `com.facebook.**` (see **Manifest permissions & privacy review** above) |
+| **`gameActivityOnStartAdditions`** | Patches `GameActivity` `registerReceiver` for Android 14+ (`RECEIVER_EXPORTED`) |
+| **`androidManifestUpdates`** | Permissions listed in **Manifest permissions & privacy review** above |
+
+To inspect exact behavior, open **`Stash_UPL_Android.xml`** or enable **`STASH_UPL_VERBOSE`** during packaging (see **Debugging**).
+
+---
+
 ### Listening to callbacks
 
 Bind to events for payment success/failure, dismiss, opt-in, page loaded, network error, and external payment URLs.
@@ -291,6 +384,46 @@ Use the **Stash** category nodes for Open Card, Open Modal, Open Browser, config
 
 ---
 
+## Debugging
+
+The Stash plugin exposes two **independent** debug controls. They affect different stages of development and use different switches.
+
+| Control | When | Switch | What you get |
+|---------|------|--------|----------------|
+| **`LogStash` verbosity** | **Runtime** (editor PIE, device, logcat) | Unreal log category | JNI traces, init details, checkout flow messages |
+| **`STASH_UPL_VERBOSE`** | **Packaging** (Android/iOS cook & package) | Environment variable | UPL step trace + internal build variable dump |
+
+### Runtime — `LogStash` (JNI and plugin logs)
+
+**Default (`Log`):** High-level lines only — e.g. `[Stash] Opening card on Android`, payment callbacks, warnings, and errors.
+
+**Verbose:** Per-call JNI traces (`Stash -> Method CallJni…`), Android init success, and other low-level plugin detail. Init failures and null JNI objects still log as **Warning** / **Error** without verbose.
+
+**Enable verbose:**
+
+| Context | How |
+|---------|-----|
+| Editor console | `Log LogStash Verbose` (reset: `Log LogStash Log`) |
+| Launch argument | `-LogCmds="LogStash Verbose"` |
+| Persistent (debug builds) | `Config/DefaultEngine.ini` → `[Core.Log]` → `LogStash=Verbose` |
+| Android logcat | `adb logcat \| findstr /i "LogStash Stash"` (Windows) or `adb logcat \| grep -iE 'LogStash|Stash'` (macOS/Linux) |
+
+### Build-time — `STASH_UPL_VERBOSE` (UPL packaging logs)
+
+Plugin UPL files (`Stash_UPL_Android.xml`, `Stash_UPL_iOS.xml`) can emit extra output during **Package Project**: a trace of each UPL XML step and a dump of internal variables (`PluginDir`, `BuildDir`, architecture, etc.). **Off by default** so package logs stay readable.
+
+**Enable** in the same terminal session as your cook/package (launch the editor from that shell if you use **Package Project** in the UI):
+
+| Platform | Command |
+|----------|---------|
+| Windows (cmd) | `set STASH_UPL_VERBOSE=1` |
+| Windows (PowerShell) | `$env:STASH_UPL_VERBOSE = "1"` |
+| macOS / Linux | `export STASH_UPL_VERBOSE=1` |
+
+Unset the variable or close the terminal to return to quiet packaging logs. This does **not** affect in-game `LogStash` output.
+
+---
+
 ## Troubleshooting
 
 - **Get Stash Subsystem returns null:** Ensure you pass a valid world context (e.g. **Self** from Level Blueprint or an Actor in a running game). In the editor before Play-in-Editor there is no play world, so the subsystem is not available.
@@ -304,8 +437,9 @@ Use the **Stash** category nodes for Open Card, Open Modal, Open Browser, config
 - **Android – `Assertion failed: Result` in `Stack.h`:** Stale **WBP_StashUI** (or your widget) bytecode still references a removed **Make Stash Card Config** pin (e.g. old **Use Android Checkout Backdrop**). Open the widget, **delete** the **Make Stash Card Config** node, place a new one, wire only **Android Checkout Backdrop** from capture → **Open Card With Config**, compile, save, then **recook** Android.
 - **Android – crash on Open Browser with keep-alive:** `NoSuchMethodError` on `ServiceCompat.startForeground(Service, int, Notification, int)` means **`androidx.core` is too old** in the packaged APK. Ensure `Stash_UPL_Android.xml` still includes **`implementation 'androidx.core:core:1.13.1'`** (or newer); see the **Android keep-alive service** section above.
 - **Android – Gradle `checkDebugDuplicateClasses` (Kotlin):** Duplicate classes in `kotlin-stdlib` vs `kotlin-stdlib-jdk7` / `kotlin-stdlib-jdk8` usually means mixed Kotlin versions. The plugin’s UPL should force **`org.jetbrains.kotlin` to 1.8.22**; if you still see this after merging other Gradle snippets, align or exclude conflicting Kotlin artifacts.
-- **Debugging — verbose `LogStash` (JNI / low-level Android):** By default you see high-level lines only (e.g. `[Stash] Opening card on Android`, payment callbacks). Per-call JNI traces (`Stash -> Method CallJni…`) and Android init success are **`Verbose`** and hidden unless you raise the category. **Editor console:** `Log LogStash Verbose` (reset with `Log LogStash Log`). **Launch argument:** `-LogCmds="LogStash Verbose"`. **Persistent (debug builds):** in `Config/DefaultEngine.ini`, `[Core.Log]` → `LogStash=Verbose`. **Android logcat:** `adb logcat | findstr /i "LogStash Stash"` (use `grep` on macOS/Linux). Warnings and errors (init failure, null JNI object) still appear without verbose.
 - **Xcode: "ExternalBuildToolExecution failed" / "never received target ended message":** The real error is from UnrealBuildTool. Check `~/Library/Application Support/Epic/UnrealBuildTool/Log.txt`. Clear Xcode caches: delete `~/Library/Developer/Xcode/DerivedData`, then regenerate project files and reopen. Alternatively, build from Unreal Editor (open the `.uproject`) or from the command line with the engine's `Build.sh` instead of Xcode.
+
+For verbose runtime JNI logs or UPL packaging traces, see **Debugging** above.
 
 ---
 

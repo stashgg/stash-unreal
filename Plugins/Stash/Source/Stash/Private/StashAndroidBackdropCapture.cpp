@@ -190,6 +190,13 @@ namespace
 	}
 #endif
 
+	class FStashLatentCaptureState
+	{
+	public:
+		TArray<uint8> CapturedBytes;
+		bool bFinished = false;
+	};
+
 	class FStashViewportCaptureLatentAction : public FPendingLatentAction
 	{
 	public:
@@ -197,27 +204,53 @@ namespace
 		int32 OutputLink;
 		FWeakObjectPtr CallbackTarget;
 		TArray<uint8>& OutImageBytes;
-		TArray<uint8> CapturedBytes;
-		bool bFinished;
+		TSharedRef<FStashLatentCaptureState> CaptureState;
 
-		FStashViewportCaptureLatentAction(const FLatentActionInfo& LatentInfo, TArray<uint8>& InOutImageBytes)
+		FStashViewportCaptureLatentAction(
+			const FLatentActionInfo& LatentInfo,
+			TArray<uint8>& InOutImageBytes,
+			TSharedRef<FStashLatentCaptureState> InCaptureState)
 			: ExecutionFunction(LatentInfo.ExecutionFunction)
 			, OutputLink(LatentInfo.Linkage)
 			, CallbackTarget(LatentInfo.CallbackTarget)
 			, OutImageBytes(InOutImageBytes)
-			, bFinished(false)
+			, CaptureState(InCaptureState)
 		{
 		}
 
 		virtual void UpdateOperation(FLatentResponse& Response) override
 		{
-			if (bFinished)
+			if (CaptureState->bFinished)
 			{
-				OutImageBytes = MoveTemp(CapturedBytes);
+				OutImageBytes = MoveTemp(CaptureState->CapturedBytes);
 			}
-			Response.FinishAndTriggerIf(bFinished, ExecutionFunction, OutputLink, CallbackTarget);
+			Response.FinishAndTriggerIf(CaptureState->bFinished, ExecutionFunction, OutputLink, CallbackTarget);
 		}
 	};
+
+	static void BeginLatentBackdropCapture(
+		UWorld* World,
+		UObject* WorldContextObject,
+		TArray<uint8>& OutImageBytes,
+		const FLatentActionInfo& LatentInfo)
+	{
+		TSharedRef<FStashLatentCaptureState> CaptureState = MakeShared<FStashLatentCaptureState>();
+		FLatentActionManager& LatentManager = World->GetLatentActionManager();
+		// FPendingLatentAction is heap-allocated; FLatentActionManager owns and deletes it.
+		FStashViewportCaptureLatentAction* LatentAction = new FStashViewportCaptureLatentAction(LatentInfo, OutImageBytes, CaptureState);
+		LatentManager.AddNewAction(LatentInfo.CallbackTarget, LatentInfo.UUID, LatentAction);
+
+		TWeakObjectPtr<UWorld> WeakWorld(World);
+		StashScheduleAndroidCheckoutBackdropCapture(WorldContextObject, [CaptureState, WeakWorld](TArray<uint8> Bytes) mutable
+			{
+				if (!WeakWorld.IsValid())
+				{
+					return;
+				}
+				CaptureState->CapturedBytes = MoveTemp(Bytes);
+				CaptureState->bFinished = true;
+			});
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -253,14 +286,7 @@ void StashCaptureAndroidCheckoutBackdropLatent(UObject* WorldContextObject, TArr
 {
 	if (UWorld* World = GEngine ? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull) : nullptr)
 	{
-		FLatentActionManager& LatentManager = World->GetLatentActionManager();
-		FStashViewportCaptureLatentAction* LatentAction = new FStashViewportCaptureLatentAction(LatentInfo, OutImageBytes);
-		LatentManager.AddNewAction(LatentInfo.CallbackTarget, LatentInfo.UUID, LatentAction);
-		StashScheduleAndroidCheckoutBackdropCapture(WorldContextObject, [LatentAction](TArray<uint8> Bytes)
-			{
-				LatentAction->CapturedBytes = MoveTemp(Bytes);
-				LatentAction->bFinished = true;
-			});
+		BeginLatentBackdropCapture(World, WorldContextObject, OutImageBytes, LatentInfo);
 		return;
 	}
 

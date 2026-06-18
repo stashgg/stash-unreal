@@ -13,9 +13,15 @@ https://github.com/EpicGames/UnrealEngine/blob/release/Engine/Source/Programs/Un
     <init>
         <log text="Stash iOS -> Adding permission to plist"/>
         <log text="Stash iOS -> Including Stash Native SDK"/>
-        <trace enable="true"/>
 
-        <dumpvars/>
+        <!-- Opt-in UPL debug: set STASH_UPL_VERBOSE=1 before packaging (see README Debugging). -->
+        <setBoolEnvVarDefined result="bStashUplVerbose" value="%STASH_UPL_VERBOSE%"/>
+        <if condition="bStashUplVerbose">
+            <true>
+                <trace enable="true"/>
+                <dumpvars/>
+            </true>
+        </if>
     </init>
 
     <!-- Copy pre-built StashNative XCFramework -->

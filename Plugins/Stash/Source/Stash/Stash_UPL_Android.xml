@@ -11,7 +11,14 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
   <init>
     <log text="Stash Android -> Adding properties to Manifest and Gradle"/>
 
-    <dumpvars/>
+    <!-- Opt-in UPL debug: set STASH_UPL_VERBOSE=1 before packaging (see README Debugging). -->
+    <setBoolEnvVarDefined result="bStashUplVerbose" value="%STASH_UPL_VERBOSE%"/>
+    <if condition="bStashUplVerbose">
+      <true>
+        <trace enable="true"/>
+        <dumpvars/>
+      </true>
+    </if>
     
     <setBool result="bSupported" value="false"/>
 
@@ -64,6 +71,7 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
   </gradleProperties>
 
   <!-- Declare your own classes -->
+  <!-- ProGuard keeps — see README "Third-party libraries & ProGuard". -->
   <proguardAdditions>
     <insert>
       <!-- Disabling class obfuscation -->
@@ -93,6 +101,7 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
 
 
   <!-- optional updates applied to AndroidManifest.xml -->
+  <!-- Manifest permissions merged here — see README "Manifest permissions & privacy review". -->
   <androidManifestUpdates>
 
     <!-- For UE4: target SDK 31 update the SplashActivity activity -->
@@ -193,6 +202,12 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
 
 
   <!-- optional base build.gradle additions -->
+  <!--
+    AndroidX migration: beforeEvaluate walks every .java under the UE-generated Gradle rootProject
+    (Intermediate/Android/.../gradle/, not the game C++ repo) and replaces legacy android.support.*
+    strings with androidx.* mappings. Logs "Updating ... in file ..." per hit. See README
+    "Android build integration (Stash_UPL_Android.xml)".
+  -->
   <baseBuildGradleAdditions>
     <insert>
       allprojects {
