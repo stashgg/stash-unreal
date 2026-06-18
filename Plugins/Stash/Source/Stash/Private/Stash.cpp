@@ -2,7 +2,6 @@
 // Stash Unreal Engine SDK - Module Implementation
 
 #include "Stash.h"
-#include "StashEditorSettings.h"
 
 #if PLATFORM_ANDROID
 #include "Android/Utils/AndroidUtils.h"
@@ -15,13 +14,6 @@ DEFINE_LOG_CATEGORY(LogStash);
 
 void FStashModule::StartupModule()
 {
-	// Register settings in Project Settings -> Plugins -> Stash
-	if (ISettingsModule* SettingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings"))
-	{
-		UStashEditorSettings::RegisterEditorSettings(SettingsModule);
-	}
-
-	// Initialize platform-specific components
 	Initialization();
 }
 

@@ -10,9 +10,9 @@
 
 /**
  * Game Instance Subsystem that exposes Stash callbacks as BlueprintAssignable delegates.
- * Use this in Blueprint to bind to On Payment Success, On Dialog Dismissed, etc.
+ * This is the recommended callback surface for Blueprint and C++ (via GetStashSubsystem).
  *
- * In Blueprint: Get Game Instance -> Get Subsystem (Stash Subsystem) -> Assign / Add to the event you want.
+ * In Blueprint: Get Stash Subsystem -> Assign / Add to the event you want.
  */
 UCLASS()
 class STASH_API UStashSubsystem : public UGameInstanceSubsystem

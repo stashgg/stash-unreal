@@ -354,28 +354,29 @@ public:
 	static UStashSubsystem* GetStashSubsystem(UObject* WorldContextObject);
 
 	// ========================================================================
-	// Delegates - Bind to these to receive payment callbacks (C++). For Blueprint, use Get Stash Subsystem then bind to its events.
+	// Legacy static delegates (C++ only). Prefer UStashSubsystem via GetStashSubsystem.
+	// Do not bind both subsystem events and these static delegates — each native callback fires both.
 	// ========================================================================
 	
-	/** Called when a payment completes successfully */
+	/** @deprecated Prefer GetStashSubsystem()->OnPaymentSuccess for new C++ integrations. */
 	static FOnStashPaymentSuccess OnPaymentSuccess;
 	
-	/** Called when a payment fails */
+	/** @deprecated Prefer GetStashSubsystem()->OnPaymentFailure for new C++ integrations. */
 	static FOnStashPaymentFailure OnPaymentFailure;
 	
-	/** Called when the card or modal is dismissed by the user */
+	/** @deprecated Prefer GetStashSubsystem()->OnDialogDismissed for new C++ integrations. */
 	static FOnStashDialogDismissed OnDialogDismissed;
 	
-	/** Called when an opt-in response is received (modal payment channel selection) */
+	/** @deprecated Prefer GetStashSubsystem()->OnOptInResponse for new C++ integrations. */
 	static FOnStashOptInResponse OnOptInResponse;
 	
-	/** Called when the card/modal page finishes loading */
+	/** @deprecated Prefer GetStashSubsystem()->OnPageLoaded for new C++ integrations. */
 	static FOnStashPageLoaded OnPageLoaded;
 
-	/** Called when a network error occurs during initial page load */
+	/** @deprecated Prefer GetStashSubsystem()->OnNetworkError for new C++ integrations. */
 	static FOnStashNetworkError OnNetworkError;
 
-	/** Called when checkout opens an external URL (e.g. Google Pay, Klarna); payment may complete in browser or another app. */
+	/** @deprecated Prefer GetStashSubsystem()->OnExternalPayment for new C++ integrations. */
 	static FOnStashExternalPayment OnExternalPayment;
 	
 	// ========================================================================

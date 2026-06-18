@@ -673,6 +673,22 @@ static UStashSubsystem* GetStashSubsystemFromContext(UObject* WorldContextObject
 	return GI ? GI->GetSubsystem<UStashSubsystem>() : nullptr;
 }
 
+/** Dispatches a native callback on the game thread to subsystem events and legacy static delegates. */
+template<typename FSubBroadcast, typename FStaticBroadcast>
+static void BroadcastStashCallback(FSubBroadcast&& SubBroadcast, FStaticBroadcast&& StaticBroadcast)
+{
+	AsyncTask(ENamedThreads::GameThread, [
+		SubBroadcast = Forward<FSubBroadcast>(SubBroadcast),
+		StaticBroadcast = Forward<FStaticBroadcast>(StaticBroadcast)
+	]() mutable {
+		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr))
+		{
+			SubBroadcast(Sub);
+		}
+		StaticBroadcast();
+	});
+}
+
 UStashSubsystem* UStashBlueprint::GetStashSubsystem(UObject* WorldContextObject)
 {
 	return GetStashSubsystemFromContext(WorldContextObject);
@@ -681,64 +697,57 @@ UStashSubsystem* UStashBlueprint::GetStashSubsystem(UObject* WorldContextObject)
 void UStashBlueprint::HandlePaymentSuccess()
 {
 	UE_LOG(LogStash, Log, TEXT("[Stash] Payment success callback received"));
-	AsyncTask(ENamedThreads::GameThread, []() {
-		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr)) { Sub->OnPaymentSuccess.Broadcast(); }
-		OnPaymentSuccess.Broadcast();
-	});
+	BroadcastStashCallback(
+		[](UStashSubsystem* Sub) { Sub->OnPaymentSuccess.Broadcast(); },
+		[]() { UStashBlueprint::OnPaymentSuccess.Broadcast(); });
 }
 
 void UStashBlueprint::HandlePaymentFailure()
 {
 	UE_LOG(LogStash, Log, TEXT("[Stash] Payment failure callback received"));
-	AsyncTask(ENamedThreads::GameThread, []() {
-		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr)) { Sub->OnPaymentFailure.Broadcast(); }
-		OnPaymentFailure.Broadcast();
-	});
+	BroadcastStashCallback(
+		[](UStashSubsystem* Sub) { Sub->OnPaymentFailure.Broadcast(); },
+		[]() { UStashBlueprint::OnPaymentFailure.Broadcast(); });
 }
 
 void UStashBlueprint::HandleDialogDismissed()
 {
 	UE_LOG(LogStash, Log, TEXT("[Stash] Dialog dismissed callback received"));
-	AsyncTask(ENamedThreads::GameThread, []() {
-		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr)) { Sub->OnDialogDismissed.Broadcast(); }
-		OnDialogDismissed.Broadcast();
-	});
+	BroadcastStashCallback(
+		[](UStashSubsystem* Sub) { Sub->OnDialogDismissed.Broadcast(); },
+		[]() { UStashBlueprint::OnDialogDismissed.Broadcast(); });
 }
 
 void UStashBlueprint::HandleOptInResponse(const FString& OptInType)
 {
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opt-in response received: %s"), *OptInType);
-	AsyncTask(ENamedThreads::GameThread, [OptInType]() {
-		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr)) { Sub->OnOptInResponse.Broadcast(OptInType); }
-		OnOptInResponse.Broadcast(OptInType);
-	});
+	BroadcastStashCallback(
+		[OptInType](UStashSubsystem* Sub) { Sub->OnOptInResponse.Broadcast(OptInType); },
+		[OptInType]() { UStashBlueprint::OnOptInResponse.Broadcast(OptInType); });
 }
 
 void UStashBlueprint::HandlePageLoaded(float LoadTimeMs)
 {
 	UE_LOG(LogStash, Log, TEXT("[Stash] Page loaded callback received: %.2f ms"), LoadTimeMs);
-	AsyncTask(ENamedThreads::GameThread, [LoadTimeMs]() {
-		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr)) { Sub->OnPageLoaded.Broadcast(LoadTimeMs); }
-		OnPageLoaded.Broadcast(LoadTimeMs);
-	});
+	BroadcastStashCallback(
+		[LoadTimeMs](UStashSubsystem* Sub) { Sub->OnPageLoaded.Broadcast(LoadTimeMs); },
+		[LoadTimeMs]() { UStashBlueprint::OnPageLoaded.Broadcast(LoadTimeMs); });
 }
 
 void UStashBlueprint::HandleNetworkError()
 {
 	UE_LOG(LogStash, Warning, TEXT("[Stash] Network error callback received"));
-	AsyncTask(ENamedThreads::GameThread, []() {
-		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr)) { Sub->OnNetworkError.Broadcast(); }
-		OnNetworkError.Broadcast();
-	});
+	BroadcastStashCallback(
+		[](UStashSubsystem* Sub) { Sub->OnNetworkError.Broadcast(); },
+		[]() { UStashBlueprint::OnNetworkError.Broadcast(); });
 }
 
 void UStashBlueprint::HandleExternalPayment(const FString& URL)
 {
 	UE_LOG(LogStash, Log, TEXT("[Stash] External payment URL: %s"), *URL);
-	AsyncTask(ENamedThreads::GameThread, [URL]() {
-		if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr)) { Sub->OnExternalPayment.Broadcast(URL); }
-		OnExternalPayment.Broadcast(URL);
-	});
+	BroadcastStashCallback(
+		[URL](UStashSubsystem* Sub) { Sub->OnExternalPayment.Broadcast(URL); },
+		[URL]() { UStashBlueprint::OnExternalPayment.Broadcast(URL); });
 }
 
 // iOS callback bridge (called from StashNativeCardWrapper.mm)

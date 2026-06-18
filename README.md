@@ -14,8 +14,18 @@ Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash
 
 ## Sample / Downloads
 
-- **Run the sample:** Clone this repo and open `StashUnreal5.uproject` in Unreal Engine 5. The sample Blueprint uses the example keep-alive icon **`stash_icon`**, shipped under `StashUnrealSample/Android/res/drawable/` (copied into the APK by `StashUnreal5_UPL_Android.xml` — not part of the Stash plugin).
-- **Use in your project:** Copy the `Plugins/Stash/` folder into your project’s `Plugins/` directory and enable the plugin under **Edit → Plugins → Mobile → Stash**.
+### Run the sample
+
+1. Clone this repo and open **`StashUnreal5.uproject`** in Unreal Engine 5.
+2. In the Content Browser, open **`Content/StashUnrealSample/Maps/Stash_SampleScene`**.
+3. Press **Play**. The level spawns **`WBP_StashUI`** — the demo widget with Open Card, Open Modal, Open Browser, optional keep-alive, Android checkout backdrop capture, and **Get Stash Subsystem** callbacks.
+4. To inspect or copy the wiring, open **`Content/StashUnrealSample/Blueprints/WBP_StashUI`** in the Widget Blueprint editor (hover Stash nodes/pins for tooltips).
+
+The sample keep-alive config uses the example notification icon **`stash_icon`**, shipped under **`StashUnrealSample/Android/res/drawable/`** (copied into the APK by **`StashUnreal5_UPL_Android.xml`** — not part of the Stash plugin).
+
+### Use in your project
+
+Copy the **`Plugins/Stash/`** folder into your project’s **`Plugins/`** directory and enable the plugin under **Edit → Plugins → Mobile → Stash**.
 
 ## Quick Start
 
@@ -27,6 +37,7 @@ Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash
 ### Folder structure
 
 - **Plugins/Stash/** – Plugin root: `Source/Stash` (module), `ThirdParty` (StashNative AAR + XCFramework), `Resources`.
+- **Content/StashUnrealSample/** – Sample map (`Maps/Stash_SampleScene`) and demo UI (`Blueprints/WBP_StashUI`).
 - **StashUnrealSample/Android/** – Sample-only Android drawables (e.g. keep-alive notification icon); not copied when you use only the plugin in another project.
 - **StashBlueprint** – Blueprint function library: `OpenCard`, `OpenModal`, `OpenBrowser`, `CloseBrowser`, `SetAndroidCheckoutBackdropBytes`, `ClearAndroidCheckoutBackdrop`, `CaptureViewportForAndroidCheckoutBackdrop`, config structs, delegates.
 - **Key files:** `StashBlueprint.h`, iOS wrapper `StashNativeCardWrapper` (ObjC), Android `StashHelper.java`, ThirdParty StashNative binaries.
@@ -188,9 +199,15 @@ Custom notification icons require **StashNative-2.2.0+** in `ThirdParty/Android/
 
 Bind to events for payment success/failure, dismiss, opt-in, page loaded, network error, and external payment URLs.
 
-> **Blueprint:** You cannot bind to the Stash callbacks directly on the Blueprint function library (it has no object reference). Use **Get Stash Subsystem** to get the Stash Subsystem, then bind to its **On Payment Success**, **On Dialog Dismissed**, etc. on that object.
+**Use one binding path only.** Each native Stash event is delivered to **`UStashSubsystem`** (recommended) and to legacy static delegates on **`UStashBlueprint`**. If you bind both, your handler runs **twice**.
 
-#### Blueprint (recommended)
+> **Blueprint:** Use **Get Stash Subsystem** only. The static Stash function library has no bindable events.
+
+> **C++ (recommended):** Use **`UStashBlueprint::GetStashSubsystem(WorldContext)`** and bind to **`UStashSubsystem`** delegates (same events as Blueprint).
+
+> **C++ (legacy):** Static **`UStashBlueprint::OnPaymentSuccess`** (etc.) still work for older integrations. Do not also bind the subsystem.
+
+#### Blueprint
 
 1. Call **Get Stash Subsystem** (under Stash), passing **Self** or your world context. You get the Stash Subsystem object.
 2. On that object, use **Assign** or **Add** for the event you want (e.g. **Add On Payment Success**, **Add On Dialog Dismissed**).
@@ -198,13 +215,20 @@ Bind to events for payment success/failure, dismiss, opt-in, page loaded, networ
 
 Example: in Level Blueprint or an Actor, from **Begin Play** → **Get Stash Subsystem** (Self) → **Assign On Payment Success** / **Add On Payment Success** → choose your event.
 
-#### C++
+#### C++ (recommended)
 
 ```cpp
-UStashBlueprint::OnPaymentSuccess.AddDynamic(this, &AYourClass::OnStashPaymentSuccess);
-// ... or get the subsystem and bind to its delegates:
 if (UStashSubsystem* Stash = UStashBlueprint::GetStashSubsystem(this))
+{
     Stash->OnPaymentSuccess.AddDynamic(this, &AYourClass::OnStashPaymentSuccess);
+}
+```
+
+#### C++ (legacy static delegates)
+
+```cpp
+// Still supported; prefer GetStashSubsystem + subsystem delegates for new code.
+UStashBlueprint::OnPaymentSuccess.AddDynamic(this, &AYourClass::OnStashPaymentSuccess);
 ```
 
 ---
@@ -233,10 +257,12 @@ if (UStashSubsystem* Stash = UStashBlueprint::GetStashSubsystem(this))
 | `GetStashSubsystem(WorldContextObject)` | Returns the Stash Subsystem so you can bind to On Payment Success, On Dialog Dismissed, etc. in Blueprint |
 | `MakeStashCardConfig(...)` | Builds `FStashCardConfig` for OpenCardWithConfig |
 
-### Delegates
+### Callback events (`UStashSubsystem` — recommended)
 
-| Delegate | Description |
-|----------|-------------|
+Bind via **Get Stash Subsystem** in Blueprint or **`UStashBlueprint::GetStashSubsystem`** in C++.
+
+| Event | Description |
+|-------|-------------|
 | `OnPaymentSuccess` | Payment completed successfully |
 | `OnPaymentFailure` | Payment failed |
 | `OnDialogDismissed` | User dismissed the dialog |
@@ -244,6 +270,10 @@ if (UStashSubsystem* Stash = UStashBlueprint::GetStashSubsystem(this))
 | `OnPageLoaded(LoadTimeMs)` | Page finished loading |
 | `OnNetworkError` | Network error during load |
 | `OnExternalPayment(URL)` | Checkout opened an external URL (e.g. Google Pay, Klarna, crypto); payment may complete in browser or another app; user returns via deep link |
+
+### Legacy static delegates (`UStashBlueprint` — C++ only)
+
+Same event names as static members on `UStashBlueprint` (`OnPaymentSuccess`, etc.). Supported for backward compatibility; **do not bind both** subsystem and static delegates.
 
 ### Config types
 
@@ -264,6 +294,7 @@ Use the **Stash** category nodes for Open Card, Open Modal, Open Browser, config
 ## Troubleshooting
 
 - **Get Stash Subsystem returns null:** Ensure you pass a valid world context (e.g. **Self** from Level Blueprint or an Actor in a running game). In the editor before Play-in-Editor there is no play world, so the subsystem is not available.
+- **Payment callback runs twice:** You bound both **Get Stash Subsystem** events and legacy **`UStashBlueprint::OnPaymentSuccess`** (or another static delegate). Use **one** path — subsystem only is recommended.
 - **Blueprint shows old nodes (Open Checkout, Set Force Web Based Checkout):** The plugin API is **Open Card**, **Open Card With Config**, **Open Browser**, **Close Browser**, **Is Card Open**, **Dismiss Card** (no Open Checkout, no Force Web Based). If you still see old names, do a **clean rebuild**: close the editor, delete the `Intermediate` and `Binaries` folders in your project root, then reopen the `.uproject`. The editor will recompile and Blueprint will show only the new Stash nodes.
 - **iOS – undefined symbol / Library not loaded:** Add WebKit and SafariServices if needed; ensure **StashNative.xcframework** is embedded (Embed & Sign) and present under `Plugins/Stash/Source/Stash/ThirdParty/iOS/`.
 - **Android – class not found / blank card:** Ensure **StashNative** AAR is in `ThirdParty/Android/` (e.g. `StashNative-2.2.1.aar`; the filename must match `Stash_UPL_Android.xml` → `gradleCopies`). Add internet permission. ProGuard: keep `com.stash.**`.
