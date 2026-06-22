@@ -159,7 +159,8 @@ struct FStashModalConfig
  * Stash Blueprint Function Library
  *
  * Static nodes under the Stash category in Blueprint (Open Card, Open Modal, Get Stash Subsystem, etc.).
- * Mobile-only at runtime: iOS and Android call into StashNative via Obj-C / JNI; other platforms log and no-op.
+ * Mobile-only at runtime on device targets: iOS and Android call into StashNative via Obj-C / JNI.
+ * In the editor (Windows/macOS), Open Card / Open Modal can route to the Stash Preview panel when enabled.
  *
  * Callbacks: use Get Stash Subsystem and bind to its events. Do not also bind legacy static delegates on this class.
  * Implementation split: StashBlueprint.cpp (this API), StashBlueprintCallbacks.cpp (dispatch), platform callback .cpp files.

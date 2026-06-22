@@ -8,6 +8,10 @@
 #include "Stash.h"
 #include "StashAndroidBackdropCapture.h"
 
+#if WITH_EDITOR
+#include "StashEditorPreviewBridge.h"
+#endif
+
 #if PLATFORM_ANDROID
 #include "Android/Utils/AndroidUtils.h"
 #endif
@@ -140,6 +144,12 @@ void UStashBlueprint::OpenCard(const FString& URL)
 		URL
 	);
 #else
+#if WITH_EDITOR
+	if (FStashEditorPreviewBridge::TryOpenCard(URL))
+	{
+		return;
+	}
+#endif
 	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenCard called on unsupported platform"));
 #endif
 }
@@ -190,6 +200,12 @@ void UStashBlueprint::OpenCardWithConfig(const FString& URL, const FStashCardCon
 		SafeConfig.AndroidCheckoutBackdrop
 	);
 #else
+#if WITH_EDITOR
+	if (FStashEditorPreviewBridge::TryOpenCard(URL, SafeConfig))
+	{
+		return;
+	}
+#endif
 	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenCardWithConfig called on unsupported platform"));
 #endif
 }
@@ -210,7 +226,11 @@ bool UStashBlueprint::IsCardOpen()
 		false
 	);
 #else
+#if WITH_EDITOR
+	return FStashEditorPreviewBridge::TryIsCardOpen();
+#else
 	return false;
+#endif
 #endif
 }
 
@@ -226,7 +246,11 @@ bool UStashBlueprint::IsPurchaseProcessing()
 		false
 	);
 #else
+#if WITH_EDITOR
+	return FStashEditorPreviewBridge::TryIsPurchaseProcessing();
+#else
 	return false;
+#endif
 #endif
 }
 
@@ -243,6 +267,8 @@ void UStashBlueprint::DismissCard()
 		"",
 		true
 	);
+#elif WITH_EDITOR
+	FStashEditorPreviewBridge::TryDismissCard();
 #endif
 }
 
@@ -270,6 +296,12 @@ void UStashBlueprint::OpenBrowser(const FString& URL)
 		URL
 	);
 #else
+#if WITH_EDITOR
+	if (FStashEditorPreviewBridge::TryOpenBrowser(URL))
+	{
+		return;
+	}
+#endif
 	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenBrowser called on unsupported platform"));
 #endif
 }
@@ -281,6 +313,8 @@ void UStashBlueprint::CloseBrowser()
 	[[StashNativeCardWrapper sharedInstance] closeBrowser];
 #elif PLATFORM_ANDROID
 	// No-op on Android (Chrome Custom Tabs cannot be closed by the app)
+#elif WITH_EDITOR
+	FStashEditorPreviewBridge::TryCloseBrowser();
 #else
 	UE_LOG(LogStash, Warning, TEXT("[Stash] CloseBrowser called on unsupported platform"));
 #endif
@@ -310,6 +344,12 @@ void UStashBlueprint::OpenModal(const FString& URL)
 		URL
 	);
 #else
+#if WITH_EDITOR
+	if (FStashEditorPreviewBridge::TryOpenModal(URL))
+	{
+		return;
+	}
+#endif
 	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenModal called on unsupported platform"));
 #endif
 }
@@ -357,6 +397,12 @@ void UStashBlueprint::OpenModalWithConfig(const FString& URL, const FStashModalC
 		SafeConfig.BackgroundColor
 	);
 #else
+#if WITH_EDITOR
+	if (FStashEditorPreviewBridge::TryOpenModal(URL, SafeConfig))
+	{
+		return;
+	}
+#endif
 	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenModalWithConfig called on unsupported platform"));
 #endif
 }
@@ -369,6 +415,8 @@ void UStashBlueprint::SetLandscapeLockWhenCardClosed(bool bEnable)
 {
 #if PLATFORM_IOS
 	[[StashNativeCardWrapper sharedInstance] setLandscapeLockWhenCardClosed:bEnable];
+#elif WITH_EDITOR
+	FStashEditorPreviewBridge::TrySetLandscapeLockWhenCardClosed(bEnable);
 #else
 	(void)bEnable;
 #endif
@@ -384,6 +432,8 @@ void UStashBlueprint::SetAndroidKeepAliveEnabled(bool bEnabled)
 		true,
 		bEnabled
 	);
+#elif WITH_EDITOR
+	FStashEditorPreviewBridge::TrySetAndroidKeepAliveEnabled(bEnabled);
 #else
 	UE_LOG(LogStash, Log, TEXT("[Stash] SetAndroidKeepAliveEnabled: no-op on this platform"));
 	(void)bEnabled;
@@ -402,6 +452,8 @@ void UStashBlueprint::SetAndroidKeepAliveConfig(const FStashKeepAliveConfig& Con
 		Config.NotificationText,
 		Config.NotificationIconDrawableName
 	);
+#elif WITH_EDITOR
+	FStashEditorPreviewBridge::TrySetAndroidKeepAliveConfig(Config);
 #else
 	UE_LOG(LogStash, Log, TEXT("[Stash] SetAndroidKeepAliveConfig: no-op on this platform"));
 #endif
@@ -427,6 +479,8 @@ void UStashBlueprint::SetAndroidCheckoutBackdropBytes(const TArray<uint8>& Image
 		true,
 		ImageBytes
 	);
+#elif WITH_EDITOR
+	FStashEditorPreviewBridge::TrySetAndroidCheckoutBackdropBytes(ImageBytes);
 #else
 	(void)ImageBytes;
 #endif
@@ -447,6 +501,8 @@ void UStashBlueprint::ClearAndroidCheckoutBackdrop()
 		"",
 		true
 	);
+#elif WITH_EDITOR
+	FStashEditorPreviewBridge::TryClearAndroidCheckoutBackdrop();
 #endif
 }
 

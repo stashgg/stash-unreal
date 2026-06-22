@@ -27,6 +27,36 @@ The sample keep-alive config uses the example notification icon **`stash_icon`**
 
 Copy the **`Plugins/Stash/`** folder into your project’s **`Plugins/`** directory and enable the plugin under **Edit → Plugins → Mobile → Stash**.
 
+**Editor checkout preview (optional):** If your Unreal Engine build includes the **Web Browser** plugin, enable it under **Edit → Plugins → Web Browser**, rebuild the editor, then use **Window → Stash Preview**. The project does **not** require Web Browser to open — Stash mobile builds are unaffected.
+
+## Unreal Editor Preview
+
+The plugin includes an editor-only checkout preview (similar to [stash-unity’s editor simulator](https://github.com/stashgg/stash-unity)). Test Stash Pay card, modal, and browser flows on Windows/macOS without deploying to a device.
+
+### Setup
+
+1. Enable **Stash** under **Edit → Plugins**, then restart the editor.
+2. **Optional (preview webview):** If **Web Browser** appears in the plugin list, enable it, rebuild, and restart.
+3. Open **Window → Stash Preview** (dock tab on the right).
+4. Optional: **Edit → Project Settings → Plugins → Stash** — toggle **Enable Editor Preview**, browser mode, and default device preset.
+
+### Usage
+
+When **Enable Editor Preview** is on, calls to **Open Card**, **Open Modal**, and related APIs during **Play-In-Editor** are intercepted and shown in the preview panel with a phone-sized webview, dim overlay, and card/modal chrome driven by your config ratios.
+
+| API | Editor preview behavior |
+|-----|-------------------------|
+| `OpenCard` / `OpenCardWithConfig` | Card layout + backdrop bytes |
+| `OpenModal` / `OpenModalWithConfig` | Centered modal layout |
+| `IsCardOpen` / `IsPurchaseProcessing` / `DismissCard` | Session state |
+| `OpenBrowser` | In-panel browser (default) or OS browser (setting) |
+| `CloseBrowser` | Closes in-panel browser session |
+| `SetAndroidCheckoutBackdropBytes` / `Clear…` | Backdrop behind dim overlay |
+| `SetLandscapeLockWhenCardClosed` / keep-alive APIs | Stored for debug display (no native effect) |
+| Callbacks | Fired via injected `window.stash_sdk` JS bridge or **Simulate callbacks** buttons |
+
+**Not simulated:** real payments, Chrome Custom Tabs / Safari chrome, Android keep-alive service, OS orientation lock. Device builds are unchanged (`StashEditor` is editor-only).
+
 ## Quick Start
 
 1. Add the Stash plugin (see above).

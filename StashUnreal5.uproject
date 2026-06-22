@@ -22,6 +22,10 @@
 		{
 			"Name": "GoogleVRController",
 			"Enabled": false
+		},
+		{
+			"Name": "WebBrowserWidget",
+			"Enabled": true
 		}
 	]
 }
