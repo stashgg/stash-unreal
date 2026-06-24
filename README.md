@@ -42,12 +42,29 @@ The plugin includes an editor-only checkout preview (similar to [stash-unity’s
 
 ### Usage
 
-When **Enable Editor Preview** is on, calls to **Open Card**, **Open Modal**, and related APIs during **Play-In-Editor** are intercepted and shown in the preview panel with a phone-sized webview, dim overlay, and card/modal chrome driven by your config ratios.
+When **Enable Editor Preview** is on, calls to **Open Card**, **Open Modal**, and related APIs during **Play-In-Editor** are intercepted and shown in the preview panel with a phone-sized webview, dim overlay, and card/modal chrome driven by your Blueprint config.
+
+**Config-driven layout:** The preview reads `FStashCardConfig` / `FStashModalConfig` from each open call and applies native-aligned sizing:
+
+- **Card (phone):** bottom drawer — full width × `CardHeightRatioPortrait` in portrait; `CardWidthRatioLandscape` × `CardHeightRatioLandscape` in landscape.
+- **Card (tablet):** iPad / iPad Pro presets (or Custom when max dimension ≥ 768) use `TabletWidth/HeightRatio*` and a **centered** sheet, not a bottom drawer.
+- **Card `bForcePortrait`:** portrait ratios even if the preview device is landscape; landscape toggle is disabled while the card is open.
+- **Modal:** phone or tablet ratio sets; always **centered** (both width and height from config — unlike card, phone modal is never full-bleed width). `bAllowDismiss` — tap the dim overlay to dismiss (unless purchase is processing).
+- **`BackgroundColor`:** visible as the rounded sheet shell behind the webview (drag handle on **card** only; modal is a centered dialog without the card swipe handle).
+- **`AndroidCheckoutBackdrop`:** rendered behind the dim overlay.
+
+The **Active config** block in the preview controls panel shows which ratio fields are active, applied pixel size, flags, and shell color. Pick a device preset that matches the ratios you want to verify (e.g. **iPad Pro** + landscape toggle for tablet modal ratios; **iPhone** portrait uses `PhoneWidthRatioPortrait` × `PhoneHeightRatioPortrait`).
+
+**Dismiss in preview:** drag the sheet handle downward (card only), tap the dim overlay (modal when `bAllowDismiss`), or use the **Dismiss** button in the controls panel.
+
+**Expand card in preview:** drag the sheet handle upward on phone bottom-drawer cards to expand toward 90% screen height; release past halfway to snap expanded, or drag back down to collapse before dismissing. On [test.stashpreview.com](https://test.stashpreview.com/), **Expand** / **Collapse** call `stash_sdk.expand()` / `stash_sdk.collapse()` and resize the card the same way.
+
+**Scroll in preview:** click and drag inside the checkout webview to scroll (mobile-style; scrollbars stay hidden). Mouse wheel also works.
 
 | API | Editor preview behavior |
 |-----|-------------------------|
-| `OpenCard` / `OpenCardWithConfig` | Card layout + backdrop bytes |
-| `OpenModal` / `OpenModalWithConfig` | Centered modal layout |
+| `OpenCard` / `OpenCardWithConfig` | Card layout from config + backdrop bytes |
+| `OpenModal` / `OpenModalWithConfig` | Centered modal layout from config; dim tap dismiss when `bAllowDismiss` |
 | `IsCardOpen` / `IsPurchaseProcessing` / `DismissCard` | Session state |
 | `OpenBrowser` | In-panel browser (default) or OS browser (setting) |
 | `CloseBrowser` | Closes in-panel browser session |

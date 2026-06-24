@@ -10,6 +10,8 @@
 
 #if WITH_EDITOR
 #include "StashEditorPreviewBridge.h"
+#include "Engine/Engine.h"
+#include "Engine/World.h"
 #endif
 
 #if PLATFORM_ANDROID
@@ -22,6 +24,28 @@
 
 namespace
 {
+#if WITH_EDITOR
+	UWorld* ResolveEditorPreviewCallbackWorld()
+	{
+		if (GWorld)
+		{
+			return GWorld;
+		}
+		return GEngine ? GEngine->GetCurrentPlayWorld() : nullptr;
+	}
+
+	bool TryEditorPreview(TFunctionRef<bool()> OpenFn)
+	{
+		UStashBlueprint::SetEditorPreviewCallbackWorld(ResolveEditorPreviewCallbackWorld());
+		if (OpenFn())
+		{
+			return true;
+		}
+		UStashBlueprint::ClearEditorPreviewCallbackWorld();
+		return false;
+	}
+#endif
+
 	constexpr float StashRatioMin = 0.1f;
 	constexpr float StashRatioMax = 1.0f;
 
@@ -145,7 +169,7 @@ void UStashBlueprint::OpenCard(const FString& URL)
 	);
 #else
 #if WITH_EDITOR
-	if (FStashEditorPreviewBridge::TryOpenCard(URL))
+	if (TryEditorPreview([&]() { return FStashEditorPreviewBridge::TryOpenCard(URL); }))
 	{
 		return;
 	}
@@ -201,7 +225,7 @@ void UStashBlueprint::OpenCardWithConfig(const FString& URL, const FStashCardCon
 	);
 #else
 #if WITH_EDITOR
-	if (FStashEditorPreviewBridge::TryOpenCard(URL, SafeConfig))
+	if (TryEditorPreview([&]() { return FStashEditorPreviewBridge::TryOpenCard(URL, SafeConfig); }))
 	{
 		return;
 	}
@@ -297,7 +321,7 @@ void UStashBlueprint::OpenBrowser(const FString& URL)
 	);
 #else
 #if WITH_EDITOR
-	if (FStashEditorPreviewBridge::TryOpenBrowser(URL))
+	if (TryEditorPreview([&]() { return FStashEditorPreviewBridge::TryOpenBrowser(URL); }))
 	{
 		return;
 	}
@@ -345,7 +369,7 @@ void UStashBlueprint::OpenModal(const FString& URL)
 	);
 #else
 #if WITH_EDITOR
-	if (FStashEditorPreviewBridge::TryOpenModal(URL))
+	if (TryEditorPreview([&]() { return FStashEditorPreviewBridge::TryOpenModal(URL); }))
 	{
 		return;
 	}
@@ -398,7 +422,7 @@ void UStashBlueprint::OpenModalWithConfig(const FString& URL, const FStashModalC
 	);
 #else
 #if WITH_EDITOR
-	if (FStashEditorPreviewBridge::TryOpenModal(URL, SafeConfig))
+	if (TryEditorPreview([&]() { return FStashEditorPreviewBridge::TryOpenModal(URL, SafeConfig); }))
 	{
 		return;
 	}

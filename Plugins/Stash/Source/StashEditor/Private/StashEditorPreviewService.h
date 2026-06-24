@@ -13,6 +13,8 @@ struct FStashPreviewSession
 	bool bIsPurchaseProcessing = false;
 	bool bLandscapeLockWhenCardClosed = false;
 	bool bKeepAliveEnabled = false;
+	bool bForcePortraitLayout = false;
+	bool bAllowDismiss = true;
 	FStashKeepAliveConfig KeepAliveConfig;
 	TArray<uint8> BackdropBytes;
 	FString CurrentUrl;
@@ -65,8 +67,11 @@ public:
 	FStashPreviewSession& GetMutableSession() { return Session; }
 
 	void NotifyUrlChanged(const FString& Url);
+	/** Parses, deduplicates, and dispatches a preview callback URL from any bridge (CEF scheme, console, navigation). */
+	bool DispatchPreviewCallbackUrl(const FString& Url);
 	void NotifyLoadCompleted();
 	void NotifyLoadError();
+	void SetCardSheetExpandedFromSdk(bool bExpanded);
 	void SimulatePaymentSuccess();
 	void SimulatePaymentFailure();
 	void SimulateOptInResponse(const FString& OptInType);
@@ -75,11 +80,16 @@ public:
 	void EnsurePreviewTabOpen();
 
 	bool CanUsePreview() const;
-	bool BeginSession(const FString& URL, EStashPreviewPresentationMode Mode);
+	bool PrepareSession(const FString& URL, EStashPreviewPresentationMode Mode);
+	void CommitSession();
 	void EndSession(bool bFireDismiss);
 	void RefreshAllPanels();
 	FString NormalizeUrl(const FString& URL) const;
 
 	FStashPreviewSession Session;
 	TArray<TWeakPtr<SStashPreviewPanel>> PreviewPanels;
+
+	FString LastPreviewCallbackDedupKey;
+	double LastPreviewCallbackTime = -1.0;
+	static constexpr double PreviewCallbackDedupSeconds = 0.25;
 };

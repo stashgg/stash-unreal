@@ -7,6 +7,7 @@
 #include "StashEditorPreviewService.h"
 #include "StashEditorPreviewTab.h"
 #include "StashGraphPanelPinFactory.h"
+#include "StashPreviewSchemeHandler.h"
 #include "ToolMenus.h"
 
 DEFINE_LOG_CATEGORY(LogStashEditor);
@@ -24,10 +25,14 @@ public:
 
 		FStashEditorPreviewTab::RegisterTabSpawner();
 		UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateStatic(&FStashEditorPreviewTab::RegisterMenuEntry));
+
+		RegisterStashPreviewSchemeHandler();
 	}
 
 	virtual void ShutdownModule() override
 	{
+		UnregisterStashPreviewSchemeHandler();
+
 		FStashEditorPreviewBridge::Unregister();
 		PreviewService.Reset();
 

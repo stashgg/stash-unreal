@@ -25,6 +25,10 @@ FOnStashExternalPayment UStashBlueprint::OnExternalPayment;
 
 namespace
 {
+#if WITH_EDITOR
+	TWeakObjectPtr<UWorld> GEditorPreviewCallbackWorld;
+#endif
+
 	/** Resolves subsystem for Blueprint (explicit context) or native callbacks (nullptr → current play world). */
 	UStashSubsystem* GetStashSubsystemFromContext(UObject* WorldContextObject)
 	{
@@ -53,7 +57,27 @@ namespace
 		}
 		if (!World && GEngine)
 		{
-			World = GEngine->GetCurrentPlayWorld();
+#if WITH_EDITOR
+			if (GEditorPreviewCallbackWorld.IsValid())
+			{
+				World = GEditorPreviewCallbackWorld.Get();
+			}
+			if (!World && GIsEditor)
+			{
+				for (const FWorldContext& Ctx : GEngine->GetWorldContexts())
+				{
+					if (Ctx.World() && Ctx.WorldType == EWorldType::PIE)
+					{
+						World = Ctx.World();
+						break;
+					}
+				}
+			}
+#endif
+			if (!World)
+			{
+				World = GEngine->GetCurrentPlayWorld();
+			}
 		}
 		UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
 		return GI ? GI->GetSubsystem<UStashSubsystem>() : nullptr;
@@ -63,18 +87,51 @@ namespace
 	template<typename FSubBroadcast, typename FStaticBroadcast>
 	void BroadcastStashCallback(FSubBroadcast&& SubBroadcast, FStaticBroadcast&& StaticBroadcast)
 	{
+		// Resolve while the preview session world is still pinned (EndSession may clear it before AsyncTask runs).
+#if WITH_EDITOR
+		TWeakObjectPtr<UWorld> WorldAtDispatch = GEditorPreviewCallbackWorld;
+#else
+		TWeakObjectPtr<UWorld> WorldAtDispatch;
+#endif
+		TWeakObjectPtr<UStashSubsystem> SubsystemAtDispatch = GetStashSubsystemFromContext(nullptr);
 		AsyncTask(ENamedThreads::GameThread, [
+			WorldAtDispatch,
+			SubsystemAtDispatch,
 			SubBroadcast = Forward<FSubBroadcast>(SubBroadcast),
 			StaticBroadcast = Forward<FStaticBroadcast>(StaticBroadcast)
 		]() mutable {
-			if (UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr))
+			UStashSubsystem* Sub = SubsystemAtDispatch.Get();
+			if (!Sub && WorldAtDispatch.IsValid())
+			{
+				if (UGameInstance* GI = WorldAtDispatch->GetGameInstance())
+				{
+					Sub = GI->GetSubsystem<UStashSubsystem>();
+				}
+			}
+			if (Sub)
 			{
 				SubBroadcast(Sub);
+			}
+			else
+			{
+				UE_LOG(LogStash, Warning, TEXT("[Stash] Subsystem callback skipped (no UStashSubsystem). Use Get Stash Subsystem during PIE and open checkout from Play, not the preview tab alone."));
 			}
 			StaticBroadcast();
 		});
 	}
 }
+
+#if WITH_EDITOR
+void UStashBlueprint::SetEditorPreviewCallbackWorld(UWorld* World)
+{
+	GEditorPreviewCallbackWorld = World;
+}
+
+void UStashBlueprint::ClearEditorPreviewCallbackWorld()
+{
+	GEditorPreviewCallbackWorld.Reset();
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // Blueprint API — subsystem accessor

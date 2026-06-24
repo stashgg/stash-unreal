@@ -4,12 +4,14 @@
 #include "SStashPreviewPanel.h"
 #include "StashEditorPreviewTab.h"
 #include "StashPreviewJsBridge.h"
+#include "StashPreviewCallbackUrl.h"
 #include "StashEditorLog.h"
 #include "StashBlueprint.h"
 #include "StashEditorSettings.h"
 #include "HAL/PlatformProcess.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "Misc/App.h"
+#include "Async/Async.h"
 #include "Modules/ModuleManager.h"
 
 FStashPreviewDeviceSize StashPreviewGetDeviceSize(EStashPreviewDevicePreset Preset, float CustomWidth, float CustomHeight)
@@ -75,7 +77,7 @@ FString FStashEditorPreviewService::NormalizeUrl(const FString& URL) const
 	return FString(TEXT("https://")) + URL;
 }
 
-bool FStashEditorPreviewService::BeginSession(const FString& URL, EStashPreviewPresentationMode Mode)
+bool FStashEditorPreviewService::PrepareSession(const FString& URL, EStashPreviewPresentationMode Mode)
 {
 	if (!CanUsePreview())
 	{
@@ -89,53 +91,50 @@ bool FStashEditorPreviewService::BeginSession(const FString& URL, EStashPreviewP
 
 	Session.bIsOpen = true;
 	Session.bIsPurchaseProcessing = false;
+	Session.bForcePortraitLayout = false;
+	Session.bAllowDismiss = true;
 	Session.CurrentUrl = Normalized;
 	Session.PresentationMode = Mode;
 	Session.LoadStartSeconds = FApp::GetCurrentTime();
 	Session.bPageLoadedFired = false;
-
-	EnsurePreviewTabOpen();
-	RefreshAllPanels();
-	UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Session started (%d): %s"), static_cast<int32>(Mode), *Normalized);
+	LastPreviewCallbackDedupKey.Reset();
+	LastPreviewCallbackTime = -1.0;
 	return true;
 }
 
-void FStashEditorPreviewService::EndSession(bool bFireDismiss)
+void FStashEditorPreviewService::CommitSession()
 {
-	if (!Session.bIsOpen)
-	{
-		return;
-	}
-	Session.bIsOpen = false;
-	Session.bIsPurchaseProcessing = false;
+	EnsurePreviewTabOpen();
 	RefreshAllPanels();
-	if (bFireDismiss)
-	{
-		UStashBlueprint::HandleDialogDismissed();
-	}
+	UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Session committed (%d): %s"),
+		static_cast<int32>(Session.PresentationMode), *Session.CurrentUrl);
 }
 
 bool FStashEditorPreviewService::OpenCard(const FString& URL, const FStashCardConfig& Config)
 {
-	if (!BeginSession(URL, EStashPreviewPresentationMode::Card))
+	if (!PrepareSession(URL, EStashPreviewPresentationMode::Card))
 	{
 		return false;
 	}
 	Session.CardConfig = Config;
+	Session.bForcePortraitLayout = Config.bForcePortrait;
 	if (Config.AndroidCheckoutBackdrop.Num() > 0)
 	{
 		Session.BackdropBytes = Config.AndroidCheckoutBackdrop;
 	}
+	CommitSession();
 	return true;
 }
 
 bool FStashEditorPreviewService::OpenModal(const FString& URL, const FStashModalConfig& Config)
 {
-	if (!BeginSession(URL, EStashPreviewPresentationMode::Modal))
+	if (!PrepareSession(URL, EStashPreviewPresentationMode::Modal))
 	{
 		return false;
 	}
 	Session.ModalConfig = Config;
+	Session.bAllowDismiss = Config.bAllowDismiss;
+	CommitSession();
 	return true;
 }
 
@@ -153,7 +152,31 @@ bool FStashEditorPreviewService::OpenBrowser(const FString& URL)
 		}
 		return false;
 	}
-	return BeginSession(URL, EStashPreviewPresentationMode::Browser);
+	if (!PrepareSession(URL, EStashPreviewPresentationMode::Browser))
+	{
+		return false;
+	}
+	CommitSession();
+	return true;
+}
+
+void FStashEditorPreviewService::EndSession(bool bFireDismiss)
+{
+	if (!Session.bIsOpen)
+	{
+		return;
+	}
+	Session.bIsOpen = false;
+	Session.bIsPurchaseProcessing = false;
+	RefreshAllPanels();
+	if (bFireDismiss)
+	{
+		UStashBlueprint::HandleDialogDismissed();
+	}
+	AsyncTask(ENamedThreads::GameThread, []()
+	{
+		UStashBlueprint::ClearEditorPreviewCallbackWorld();
+	});
 }
 
 bool FStashEditorPreviewService::CloseBrowser()
@@ -263,17 +286,40 @@ void FStashEditorPreviewService::EnsurePreviewTabOpen()
 	}
 }
 
+bool FStashEditorPreviewService::DispatchPreviewCallbackUrl(const FString& Url)
+{
+	FString Path;
+	FString Query;
+	if (!StashPreviewCallbackUrl::ParsePreviewCallbackUrl(Url, Path, Query))
+	{
+		return false;
+	}
+
+	const FString DedupKey = StashPreviewCallbackUrl::BuildDedupKey(Path, Query);
+	const double Now = FApp::GetCurrentTime();
+	if (DedupKey == LastPreviewCallbackDedupKey
+		&& LastPreviewCallbackTime >= 0.0
+		&& (Now - LastPreviewCallbackTime) < PreviewCallbackDedupSeconds)
+	{
+		return false;
+	}
+	LastPreviewCallbackDedupKey = DedupKey;
+	LastPreviewCallbackTime = Now;
+
+	const FString CanonicalUrl = StashPreviewCallbackUrl::BuildPreviewCallbackUrl(Path, Query);
+	UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback URL: %s"), *CanonicalUrl);
+	NotifyUrlChanged(CanonicalUrl);
+	return true;
+}
+
 void FStashEditorPreviewService::NotifyUrlChanged(const FString& Url)
 {
-	if (!Url.StartsWith(StashPreviewJsBridge::SchemePrefix))
+	FString Path;
+	FString Query;
+	if (!StashPreviewCallbackUrl::ParsePreviewCallbackUrl(Url, Path, Query))
 	{
 		return;
 	}
-
-	FString PathAndQuery = Url.Mid(FCString::Strlen(StashPreviewJsBridge::SchemePrefix));
-	FString Path;
-	FString Query;
-	PathAndQuery.Split(TEXT("?"), &Path, &Query);
 
 	auto ParseQueryParam = [&Query](const TCHAR* Key) -> FString
 	{
@@ -298,39 +344,65 @@ void FStashEditorPreviewService::NotifyUrlChanged(const FString& Url)
 
 	if (Path == TEXT("paymentSuccess"))
 	{
+		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: paymentSuccess"));
 		Session.bIsPurchaseProcessing = false;
 		UStashBlueprint::HandlePaymentSuccess();
 		EndSession(false);
 	}
 	else if (Path == TEXT("paymentFailure"))
 	{
+		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: paymentFailure"));
 		Session.bIsPurchaseProcessing = false;
 		UStashBlueprint::HandlePaymentFailure();
 		EndSession(false);
 	}
 	else if (Path == TEXT("purchaseProcessing"))
 	{
+		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: purchaseProcessing"));
 		Session.bIsPurchaseProcessing = true;
 		RefreshAllPanels();
 	}
 	else if (Path == TEXT("optin"))
 	{
 		const FString OptInType = ParseQueryParam(TEXT("type"));
+		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: optin (type=%s)"), *OptInType);
 		UStashBlueprint::HandleOptInResponse(OptInType);
 		EndSession(false);
 	}
 	else if (Path == TEXT("externalBrowser"))
 	{
 		const FString ExternalUrl = ParseQueryParam(TEXT("url"));
+		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: externalBrowser (url=%s)"), *ExternalUrl);
 		UStashBlueprint::HandleExternalPayment(ExternalUrl);
 		EndSession(false);
 	}
 	else if (Path == TEXT("dismiss"))
 	{
+		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: dismiss"));
 		if (!Session.bIsPurchaseProcessing)
 		{
 			EndSession(true);
 		}
+	}
+	else if (Path == TEXT("expand"))
+	{
+		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: expand"));
+		SetCardSheetExpandedFromSdk(true);
+	}
+	else if (Path == TEXT("collapse"))
+	{
+		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: collapse"));
+		SetCardSheetExpandedFromSdk(false);
+	}
+	else if (Path == TEXT("processingCompleted"))
+	{
+		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: processingCompleted"));
+		Session.bIsPurchaseProcessing = false;
+		RefreshAllPanels();
+	}
+	else
+	{
+		UE_LOG(LogStashEditor, Warning, TEXT("[StashPreview] Unknown callback path: %s"), *Path);
 	}
 }
 
@@ -357,17 +429,17 @@ void FStashEditorPreviewService::NotifyLoadError()
 
 void FStashEditorPreviewService::SimulatePaymentSuccess()
 {
-	NotifyUrlChanged(TEXT("stash-unreal-preview://paymentSuccess"));
+	DispatchPreviewCallbackUrl(TEXT("stash-unreal-preview:///paymentSuccess"));
 }
 
 void FStashEditorPreviewService::SimulatePaymentFailure()
 {
-	NotifyUrlChanged(TEXT("stash-unreal-preview://paymentFailure"));
+	DispatchPreviewCallbackUrl(TEXT("stash-unreal-preview:///paymentFailure"));
 }
 
 void FStashEditorPreviewService::SimulateOptInResponse(const FString& OptInType)
 {
-	NotifyUrlChanged(FString::Printf(TEXT("stash-unreal-preview://optin?type=%s"), *FGenericPlatformHttp::UrlEncode(OptInType)));
+	DispatchPreviewCallbackUrl(FString::Printf(TEXT("stash-unreal-preview:///optin?type=%s"), *FGenericPlatformHttp::UrlEncode(OptInType)));
 }
 
 void FStashEditorPreviewService::SimulateDismiss()
@@ -375,5 +447,22 @@ void FStashEditorPreviewService::SimulateDismiss()
 	if (Session.bIsOpen && !Session.bIsPurchaseProcessing)
 	{
 		EndSession(true);
+	}
+}
+
+void FStashEditorPreviewService::SetCardSheetExpandedFromSdk(bool bExpanded)
+{
+	if (!Session.bIsOpen || Session.PresentationMode != EStashPreviewPresentationMode::Card)
+	{
+		return;
+	}
+
+	PreviewPanels.RemoveAll([](const TWeakPtr<SStashPreviewPanel>& Weak) { return !Weak.IsValid(); });
+	for (const TWeakPtr<SStashPreviewPanel>& Weak : PreviewPanels)
+	{
+		if (TSharedPtr<SStashPreviewPanel> Panel = Weak.Pin())
+		{
+			Panel->SetCardSheetExpanded(bExpanded);
+		}
 	}
 }

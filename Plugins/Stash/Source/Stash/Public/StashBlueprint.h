@@ -438,4 +438,10 @@ public:
 	static void HandlePageLoaded(float LoadTimeMs);
 	static void HandleNetworkError();
 	static void HandleExternalPayment(const FString& URL);
+
+#if WITH_EDITOR
+	/** Pins the PIE world for editor preview callbacks (GetCurrentPlayWorld is unreliable from the preview webview). */
+	static void SetEditorPreviewCallbackWorld(UWorld* World);
+	static void ClearEditorPreviewCallbackWorld();
+#endif
 };
