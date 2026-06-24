@@ -14,9 +14,79 @@ extern "C" {
 	void StashNativeOnPageLoaded(double loadTimeMs);
 	void StashNativeOnNetworkError(void);
 	void StashNativeOnExternalPayment(const char* url);
+	void StashNativeOnPurchaseProcessing(void);
+	void StashNativeOnProcessingCompleted(void);
 }
 
 static void StashClearForcePortrait(void);
+static void StashStartPurchaseProcessingPoll(void);
+static void StashStopPurchaseProcessingPoll(void);
+
+static BOOL _lastReportedPurchaseProcessing = NO;
+static BOOL _purchaseProcessingPollSeenPresentation = NO;
+static dispatch_source_t _purchaseProcessingPollSource = nil;
+
+static void StashPurchaseProcessingPollFired(void)
+{
+	StashNativeCard* card = [StashNativeCard sharedInstance];
+	if (!card.isCurrentlyPresented)
+	{
+		if (_purchaseProcessingPollSeenPresentation)
+		{
+			if (_lastReportedPurchaseProcessing)
+			{
+				_lastReportedPurchaseProcessing = NO;
+				StashNativeOnProcessingCompleted();
+			}
+			StashStopPurchaseProcessingPoll();
+			_purchaseProcessingPollSeenPresentation = NO;
+		}
+		return;
+	}
+
+	_purchaseProcessingPollSeenPresentation = YES;
+
+	const BOOL processing = card.isPurchaseProcessing;
+	if (processing != _lastReportedPurchaseProcessing)
+	{
+		_lastReportedPurchaseProcessing = processing;
+		if (processing)
+		{
+			StashNativeOnPurchaseProcessing();
+		}
+		else
+		{
+			StashNativeOnProcessingCompleted();
+		}
+	}
+}
+
+static void StashStartPurchaseProcessingPoll(void)
+{
+	StashStopPurchaseProcessingPoll();
+	_purchaseProcessingPollSeenPresentation = NO;
+	dispatch_queue_t queue = dispatch_get_main_queue();
+	_purchaseProcessingPollSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue);
+	dispatch_source_set_timer(
+		_purchaseProcessingPollSource,
+		dispatch_time(DISPATCH_TIME_NOW, (int64_t)(150 * NSEC_PER_MSEC)),
+		(int64_t)(150 * NSEC_PER_MSEC),
+		(int64_t)(50 * NSEC_PER_MSEC));
+	dispatch_source_set_event_handler(_purchaseProcessingPollSource, ^{
+		StashPurchaseProcessingPollFired();
+	});
+	dispatch_resume(_purchaseProcessingPollSource);
+}
+
+static void StashStopPurchaseProcessingPoll(void)
+{
+	_purchaseProcessingPollSeenPresentation = NO;
+	if (_purchaseProcessingPollSource)
+	{
+		dispatch_source_cancel(_purchaseProcessingPollSource);
+		_purchaseProcessingPollSource = nil;
+	}
+}
 
 #pragma mark - StashNativeDelegateBridge
 
@@ -40,6 +110,12 @@ static void StashClearForcePortrait(void);
 
 - (void)stashNativeCardDidDismiss
 {
+	StashStopPurchaseProcessingPoll();
+	if (_lastReportedPurchaseProcessing)
+	{
+		_lastReportedPurchaseProcessing = NO;
+		StashNativeOnProcessingCompleted();
+	}
 	StashClearForcePortrait();
 	StashNativeOnDialogDismissed();
 }
@@ -270,6 +346,7 @@ static StashNativeCardWrapper* _sharedInstance = nil;
 
 	dispatch_async(dispatch_get_main_queue(), ^{
 		[[StashNativeCard sharedInstance] openCardWithURL:urlString config:nil];
+		StashStartPurchaseProcessingPoll();
 	});
 }
 
@@ -307,6 +384,7 @@ static StashNativeCardWrapper* _sharedInstance = nil;
 			config.backgroundColor = backgroundColor;
 		}
 		[[StashNativeCard sharedInstance] openCardWithURL:urlString config:config];
+		StashStartPurchaseProcessingPoll();
 	});
 }
 
@@ -337,6 +415,7 @@ static StashNativeCardWrapper* _sharedInstance = nil;
 		StashNativeModalConfig* config = [[StashNativeModalConfig alloc] init];
 		config.allowDismiss = YES;
 		[[StashNativeCard sharedInstance] openModalWithURL:urlString config:config];
+		StashStartPurchaseProcessingPoll();
 	});
 }
 
@@ -370,6 +449,7 @@ tabletHeightRatioLandscape:(float)tabletHeightRatioLandscape
 			config.backgroundColor = backgroundColor;
 		}
 		[[StashNativeCard sharedInstance] openModalWithURL:urlString config:config];
+		StashStartPurchaseProcessingPoll();
 	});
 }
 

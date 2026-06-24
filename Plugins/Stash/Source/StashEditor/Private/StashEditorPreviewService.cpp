@@ -345,14 +345,30 @@ void FStashEditorPreviewService::NotifyUrlChanged(const FString& Url)
 	if (Path == TEXT("paymentSuccess"))
 	{
 		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: paymentSuccess"));
-		Session.bIsPurchaseProcessing = false;
+		if (Session.bIsPurchaseProcessing)
+		{
+			Session.bIsPurchaseProcessing = false;
+			UStashBlueprint::HandleProcessingCompleted();
+		}
+		else
+		{
+			Session.bIsPurchaseProcessing = false;
+		}
 		UStashBlueprint::HandlePaymentSuccess();
 		EndSession(false);
 	}
 	else if (Path == TEXT("paymentFailure"))
 	{
 		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: paymentFailure"));
-		Session.bIsPurchaseProcessing = false;
+		if (Session.bIsPurchaseProcessing)
+		{
+			Session.bIsPurchaseProcessing = false;
+			UStashBlueprint::HandleProcessingCompleted();
+		}
+		else
+		{
+			Session.bIsPurchaseProcessing = false;
+		}
 		UStashBlueprint::HandlePaymentFailure();
 		EndSession(false);
 	}
@@ -360,6 +376,7 @@ void FStashEditorPreviewService::NotifyUrlChanged(const FString& Url)
 	{
 		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: purchaseProcessing"));
 		Session.bIsPurchaseProcessing = true;
+		UStashBlueprint::HandlePurchaseProcessing();
 		RefreshAllPanels();
 	}
 	else if (Path == TEXT("optin"))
@@ -398,6 +415,7 @@ void FStashEditorPreviewService::NotifyUrlChanged(const FString& Url)
 	{
 		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: processingCompleted"));
 		Session.bIsPurchaseProcessing = false;
+		UStashBlueprint::HandleProcessingCompleted();
 		RefreshAllPanels();
 	}
 	else
@@ -435,6 +453,16 @@ void FStashEditorPreviewService::SimulatePaymentSuccess()
 void FStashEditorPreviewService::SimulatePaymentFailure()
 {
 	DispatchPreviewCallbackUrl(TEXT("stash-unreal-preview:///paymentFailure"));
+}
+
+void FStashEditorPreviewService::SimulatePurchaseProcessing()
+{
+	DispatchPreviewCallbackUrl(TEXT("stash-unreal-preview:///purchaseProcessing"));
+}
+
+void FStashEditorPreviewService::SimulateProcessingCompleted()
+{
+	DispatchPreviewCallbackUrl(TEXT("stash-unreal-preview:///processingCompleted"));
 }
 
 void FStashEditorPreviewService::SimulateOptInResponse(const FString& OptInType)

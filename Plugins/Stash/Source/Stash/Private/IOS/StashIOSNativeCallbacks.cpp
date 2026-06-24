@@ -39,5 +39,15 @@ extern "C" {
 	{
 		UStashBlueprint::HandleExternalPayment(FString(UTF8_TO_TCHAR(url ? url : "")));
 	}
+
+	void StashNativeOnPurchaseProcessing()
+	{
+		UStashBlueprint::HandlePurchaseProcessing();
+	}
+
+	void StashNativeOnProcessingCompleted()
+	{
+		UStashBlueprint::HandleProcessingCompleted();
+	}
 }
 #endif

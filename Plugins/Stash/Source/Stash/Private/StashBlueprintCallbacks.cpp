@@ -22,6 +22,8 @@ FOnStashOptInResponse UStashBlueprint::OnOptInResponse;
 FOnStashPageLoaded UStashBlueprint::OnPageLoaded;
 FOnStashNetworkError UStashBlueprint::OnNetworkError;
 FOnStashExternalPayment UStashBlueprint::OnExternalPayment;
+FOnStashPurchaseProcessing UStashBlueprint::OnPurchaseProcessing;
+FOnStashProcessingCompleted UStashBlueprint::OnProcessingCompleted;
 
 namespace
 {
@@ -87,13 +89,13 @@ namespace
 	template<typename FSubBroadcast, typename FStaticBroadcast>
 	void BroadcastStashCallback(FSubBroadcast&& SubBroadcast, FStaticBroadcast&& StaticBroadcast)
 	{
-		// Resolve while the preview session world is still pinned (EndSession may clear it before AsyncTask runs).
 #if WITH_EDITOR
 		TWeakObjectPtr<UWorld> WorldAtDispatch = GEditorPreviewCallbackWorld;
 #else
 		TWeakObjectPtr<UWorld> WorldAtDispatch;
 #endif
-		TWeakObjectPtr<UStashSubsystem> SubsystemAtDispatch = GetStashSubsystemFromContext(nullptr);
+		UStashSubsystem* SubsystemAtCapture = GetStashSubsystemFromContext(nullptr);
+		TWeakObjectPtr<UStashSubsystem> SubsystemAtDispatch = SubsystemAtCapture;
 		AsyncTask(ENamedThreads::GameThread, [
 			WorldAtDispatch,
 			SubsystemAtDispatch,
@@ -107,6 +109,10 @@ namespace
 				{
 					Sub = GI->GetSubsystem<UStashSubsystem>();
 				}
+			}
+			if (!Sub)
+			{
+				Sub = GetStashSubsystemFromContext(nullptr);
 			}
 			if (Sub)
 			{
@@ -200,4 +206,20 @@ void UStashBlueprint::HandleExternalPayment(const FString& URL)
 	BroadcastStashCallback(
 		[URL](UStashSubsystem* Sub) { Sub->OnExternalPayment.Broadcast(URL); },
 		[URL]() { UStashBlueprint::OnExternalPayment.Broadcast(URL); });
+}
+
+void UStashBlueprint::HandlePurchaseProcessing()
+{
+	UE_LOG(LogStash, Log, TEXT("[Stash] Purchase processing callback received"));
+	BroadcastStashCallback(
+		[](UStashSubsystem* Sub) { Sub->OnPurchaseProcessing.Broadcast(); },
+		[]() { UStashBlueprint::OnPurchaseProcessing.Broadcast(); });
+}
+
+void UStashBlueprint::HandleProcessingCompleted()
+{
+	UE_LOG(LogStash, Log, TEXT("[Stash] Processing completed callback received"));
+	BroadcastStashCallback(
+		[](UStashSubsystem* Sub) { Sub->OnProcessingCompleted.Broadcast(); },
+		[]() { UStashBlueprint::OnProcessingCompleted.Broadcast(); });
 }

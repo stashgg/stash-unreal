@@ -256,7 +256,7 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
 
   <!-- Copy pre-built Stash Native AAR to gradle project libs folder -->
   <gradleCopies>
-    <copyFile src="$S(PluginDir)/ThirdParty/Android/StashNative-2.2.3.aar" dst="$S(BuildDir)/gradle/app/libs/StashNative.aar" />
+    <copyFile src="$S(PluginDir)/ThirdParty/Android/StashNative-2.2.4.aar" dst="$S(BuildDir)/gradle/app/libs/StashNative.aar" />
   </gradleCopies>
 
 

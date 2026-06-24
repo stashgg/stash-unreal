@@ -453,6 +453,16 @@ FReply SStashPreviewPanel::OnSimulateFailureClicked()
 	FStashEditorPreviewService::Get()->SimulatePaymentFailure();
 	return FReply::Handled();
 }
+FReply SStashPreviewPanel::OnSimulateProcessingClicked()
+{
+	FStashEditorPreviewService::Get()->SimulatePurchaseProcessing();
+	return FReply::Handled();
+}
+FReply SStashPreviewPanel::OnSimulateProcessingCompletedClicked()
+{
+	FStashEditorPreviewService::Get()->SimulateProcessingCompleted();
+	return FReply::Handled();
+}
 FReply SStashPreviewPanel::OnSimulateDismissClicked()
 {
 	FStashEditorPreviewService::Get()->SimulateDismiss();
@@ -954,6 +964,20 @@ TSharedRef<SWidget> SStashPreviewPanel::BuildControlsPanel()
 				SNew(SButton)
 				.Text(NSLOCTEXT("StashEditor", "SimFailure", "Payment Failure"))
 				.OnClicked(this, &SStashPreviewPanel::OnSimulateFailureClicked)
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				SNew(SButton)
+				.Text(NSLOCTEXT("StashEditor", "SimProcessing", "Purchase Processing"))
+				.OnClicked(this, &SStashPreviewPanel::OnSimulateProcessingClicked)
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				SNew(SButton)
+				.Text(NSLOCTEXT("StashEditor", "SimProcessingDone", "Processing Completed"))
+				.OnClicked(this, &SStashPreviewPanel::OnSimulateProcessingCompletedClicked)
 			]
 			+ SVerticalBox::Slot()
 			.AutoHeight()

@@ -35,6 +35,8 @@ private:
 	FReply OnDismissClicked();
 	FReply OnSimulateSuccessClicked();
 	FReply OnSimulateFailureClicked();
+	FReply OnSimulateProcessingClicked();
+	FReply OnSimulateProcessingCompletedClicked();
 	FReply OnSimulateDismissClicked();
 	FReply OnSimulateOptInClicked();
 	FReply OnDimOverlayClicked();

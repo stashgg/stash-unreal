@@ -61,5 +61,15 @@ extern "C" {
 		}
 		UStashBlueprint::HandleExternalPayment(UrlStr);
 	}
+
+	JNIEXPORT void JNICALL Java_com_Plugins_Stash_StashHelper_nativeOnPurchaseProcessing(JNIEnv* env, jclass clazz)
+	{
+		UStashBlueprint::HandlePurchaseProcessing();
+	}
+
+	JNIEXPORT void JNICALL Java_com_Plugins_Stash_StashHelper_nativeOnProcessingCompleted(JNIEnv* env, jclass clazz)
+	{
+		UStashBlueprint::HandleProcessingCompleted();
+	}
 }
 #endif

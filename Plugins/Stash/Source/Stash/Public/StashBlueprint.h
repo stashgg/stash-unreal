@@ -18,6 +18,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStashOptInResponse, FString, OptI
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStashPageLoaded, float, LoadTimeMs);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashNetworkError);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStashExternalPayment, FString, URL);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashPurchaseProcessing);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashProcessingCompleted);
 
 /** Fired after end-of-frame viewport read; JPEG bytes suitable for Android checkout backdrop (assign to Card Config or Set Android Checkout Backdrop Bytes). */
 DECLARE_DYNAMIC_DELEGATE_OneParam(FOnStashViewportCaptureComplete, TArray<uint8>, ImageBytes);
@@ -427,6 +429,12 @@ public:
 
 	/** @deprecated Prefer GetStashSubsystem()->OnExternalPayment for new C++ integrations. */
 	static FOnStashExternalPayment OnExternalPayment;
+
+	/** @deprecated Prefer GetStashSubsystem()->OnPurchaseProcessing for new C++ integrations. */
+	static FOnStashPurchaseProcessing OnPurchaseProcessing;
+
+	/** @deprecated Prefer GetStashSubsystem()->OnProcessingCompleted for new C++ integrations. */
+	static FOnStashProcessingCompleted OnProcessingCompleted;
 	
 	// ========================================================================
 	// Internal — called from StashAndroidNativeCallbacks / StashIOSNativeCallbacks
@@ -438,6 +446,8 @@ public:
 	static void HandlePageLoaded(float LoadTimeMs);
 	static void HandleNetworkError();
 	static void HandleExternalPayment(const FString& URL);
+	static void HandlePurchaseProcessing();
+	static void HandleProcessingCompleted();
 
 #if WITH_EDITOR
 	/** Pins the PIE world for editor preview callbacks (GetCurrentPlayWorld is unreliable from the preview webview). */

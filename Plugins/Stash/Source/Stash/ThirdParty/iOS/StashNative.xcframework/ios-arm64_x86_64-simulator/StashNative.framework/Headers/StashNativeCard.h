@@ -43,24 +43,26 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @interface StashNativeModalConfig : NSObject
 
-/** Phone width ratio for portrait (0.1-1.0). Default 0.9. */
+/** Phone width ratio for portrait (0.1-1.0). Default 0.80. */
 @property (nonatomic, assign) CGFloat phoneWidthRatioPortrait;
-/** Phone height ratio for portrait (0.1-1.0). Default 0.7. */
+/** Phone height ratio for portrait (0.1-1.0). Default 0.50. */
 @property (nonatomic, assign) CGFloat phoneHeightRatioPortrait;
-/** Phone width ratio for landscape (0.1-1.0). Default 0.7. */
+/** Phone width ratio for landscape (0.1-1.0). Default 0.50. */
 @property (nonatomic, assign) CGFloat phoneWidthRatioLandscape;
-/** Phone height ratio for landscape (0.1-1.0). Default 0.85. */
+/** Phone height ratio for landscape (0.1-1.0). Default 0.80. */
 @property (nonatomic, assign) CGFloat phoneHeightRatioLandscape;
-/** Tablet width ratio for portrait (0.1-1.0). Default 0.6. */
+/** Tablet width ratio for portrait (0.1-1.0). Default 0.40. */
 @property (nonatomic, assign) CGFloat tabletWidthRatioPortrait;
-/** Tablet height ratio for portrait (0.1-1.0). Default 0.7. */
+/** Tablet height ratio for portrait (0.1-1.0). Default 0.30. */
 @property (nonatomic, assign) CGFloat tabletHeightRatioPortrait;
-/** Tablet width ratio for landscape (0.1-1.0). Default 0.5. */
+/** Tablet width ratio for landscape (0.1-1.0). Default 0.30. */
 @property (nonatomic, assign) CGFloat tabletWidthRatioLandscape;
-/** Tablet height ratio for landscape (0.1-1.0). Default 0.8. */
+/** Tablet height ratio for landscape (0.1-1.0). Default 0.40. */
 @property (nonatomic, assign) CGFloat tabletHeightRatioLandscape;
 /** Whether tap outside and drag gestures can dismiss the modal. Default YES. */
 @property (nonatomic, assign) BOOL allowDismiss;
+/** When NO, dialog stays open after onPaymentSuccess/onPaymentFailure (callbacks still fire). Default YES. */
+@property (nonatomic, assign) BOOL autoClose;
 /** Optional HTML hex (#RGB, #RRGGBB, #AARRGGBB) for sheet background. Omit for default Stash theme. */
 @property (nonatomic, copy, nullable) NSString *backgroundColor;
 
@@ -92,7 +94,13 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @interface StashNativeCardConfig : NSObject
 
-/** When YES, phone card forces portrait orientation. Default NO. */
+/**
+ * When YES, phone card forces portrait orientation. Default NO.
+ * On iOS this rotates the shared UIWindowScene to portrait for the whole checkout; the host
+ * app's window is in that scene, so its layout/orientation follows until checkout dismisses.
+ * Landscape-locked hosts that must not change geometry should keep this NO (e.g. use modal/popup
+ * or current-orientation presentation instead).
+ */
 @property (nonatomic, assign) BOOL forcePortrait;
 /** Phone card height ratio in portrait (0.1-1.0). Default 0.68. */
 @property (nonatomic, assign) CGFloat cardHeightRatioPortrait;
@@ -108,6 +116,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) CGFloat tabletWidthRatioLandscape;
 /** Tablet height ratio in landscape (0.1-1.0). Default 0.6. */
 @property (nonatomic, assign) CGFloat tabletHeightRatioLandscape;
+/** When NO, dialog stays open after onPaymentSuccess/onPaymentFailure (callbacks still fire). Default YES. */
+@property (nonatomic, assign) BOOL autoClose;
 /** Optional HTML hex (#RGB, #RRGGBB, #AARRGGBB) for sheet background. Omit for default Stash theme. */
 @property (nonatomic, copy, nullable) NSString *backgroundColor;
 
@@ -177,6 +187,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)stashNativeCardDidRequestExternalPaymentWithURL:(NSString *)url
     NS_SWIFT_NAME(stashNativeCardDidRequestExternalPayment(with:));
 
+/**
+ * Called when \c SFSafariViewController is dismissed after \c -openBrowserWithURL: or external
+ * payment (same browser path), either by the user (Done) or programmatically via \c -closeBrowser.
+ */
+- (void)stashNativeCardDidCloseBrowser;
+
 @end
 
 /**
@@ -222,6 +238,11 @@ NS_ASSUME_NONNULL_BEGIN
  * Gets the shared singleton instance of StashNativeCard.
  */
 + (instancetype)sharedInstance;
+
+/**
+ * Returns the SDK version string (e.g. "2.1.4").
+ */
++ (NSString *)sdkVersion;
 
 /**
  * Opens a URL in a sliding card UI.
@@ -289,7 +310,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /**
  * Opens a URL in SFSafariViewController (platform browser).
- * No callbacks or configuration - simple browser presentation.
+ * Optional \c stashNativeCardDidCloseBrowser when the Safari view is dismissed.
  *
  * @param url The URL to open in the browser
  */
@@ -320,7 +341,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 /**
  * Returns UIInterfaceOrientationMaskAll when the SDK's portrait card or browser window is the
- * active window, 0 otherwise.
+ * active window, UIInterfaceOrientationMaskPortrait while a force-portrait card has the keyboard
+ * open (SDK window only), or 0 otherwise.
  *
  * Call this from application:supportedInterfaceOrientationsForWindow: in your AppDelegate only
  * when disableAutoOrientationUnlock is YES and you want manual control.

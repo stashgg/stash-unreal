@@ -4,15 +4,24 @@
 package com.Plugins.Stash;
 
 import android.app.Activity;
+import android.app.Application;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.View;
+import android.view.ViewGroup;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
 import androidx.annotation.Keep;
 
 import com.stash.stashnative.StashNativeCard;
+
+import java.lang.ref.WeakReference;
+import java.lang.reflect.Field;
 
 /**
  * StashHelper - Java wrapper for Stash Native Android SDK.
@@ -25,7 +34,11 @@ public class StashHelper {
     private static final String TAG = "StashHelper";
     /** Filter logcat: adb logcat -s StashHelper:I *:S | grep StashBackdrop */
     private static final String BTAG = "[StashBackdrop]";
+    private static final String PORTRAIT_ACTIVITY_CLASS =
+            "com.stash.stashnative.StashNativeCardPortraitActivity";
     private static volatile boolean isInitialized = false;
+    private static volatile boolean checkoutLifecycleRegistered = false;
+    private static volatile WeakReference<Activity> checkoutPortraitActivityRef;
     private static final Object initLock = new Object();
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -39,6 +52,259 @@ public class StashHelper {
     public static native void nativeOnPageLoaded(long loadTimeMs);
     public static native void nativeOnNetworkError();
     public static native void nativeOnExternalPayment(String url);
+    public static native void nativeOnPurchaseProcessing();
+    public static native void nativeOnProcessingCompleted();
+
+    private static boolean lastReportedPurchaseProcessing = false;
+    private static boolean purchaseProcessingPollActive = false;
+    private static boolean purchaseProcessingPollSeenPresentation = false;
+    private static final long PURCHASE_PROCESSING_POLL_MS = 75L;
+    private static final StashProcessingBridge PROCESSING_BRIDGE = new StashProcessingBridge();
+    private static volatile WebView processingBridgeWebView;
+    /** Re-wraps stash_sdk after SDK injection (one-shot guard blocked re-wrap and missed portrait checkout). */
+    private static final String PROCESSING_WRAP_JS =
+        "(function(){"
+        + "window.stash_sdk=window.stash_sdk||{};"
+        + "var s=window.stash_sdk;"
+        + "if(s.onPurchaseProcessing===s.__stashUnrealWrappedPp){return;}"
+        + "var rawPp=s.onPurchaseProcessing,rawPc=s.onProcessingCompleted;"
+        + "s.onPurchaseProcessing=function(d){"
+        + "try{StashUnreal.onPurchaseProcessing();}catch(e){}"
+        + "try{if(typeof rawPp==='function')rawPp.call(s,d);}catch(e){}};"
+        + "s.onProcessingCompleted=function(d){"
+        + "try{StashUnreal.onProcessingCompleted();}catch(e){}"
+        + "try{if(typeof rawPc==='function')rawPc.call(s,d);}catch(e){}};"
+        + "s.__stashUnrealWrappedPp=s.onPurchaseProcessing;"
+        + "s.__stashUnrealWrappedPc=s.onProcessingCompleted;"
+        + "})();";
+
+    @Keep
+    private static final class StashProcessingBridge {
+        @JavascriptInterface
+        public void onPurchaseProcessing() {
+            reportPurchaseProcessingState(true);
+        }
+
+        @JavascriptInterface
+        public void onProcessingCompleted() {
+            reportPurchaseProcessingState(false);
+        }
+    }
+
+    private static void reportPurchaseProcessingState(boolean processing) {
+        if (processing == lastReportedPurchaseProcessing) {
+            return;
+        }
+        lastReportedPurchaseProcessing = processing;
+        try {
+            if (processing) {
+                nativeOnPurchaseProcessing();
+            } else {
+                nativeOnProcessingCompleted();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error reporting purchase processing state: " + e.getMessage());
+        }
+    }
+
+    private static void attachProcessingBridge() {
+        try {
+            WebView webView = resolveCheckoutWebView();
+            if (webView == null) {
+                return;
+            }
+            if (processingBridgeWebView != webView) {
+                webView.addJavascriptInterface(PROCESSING_BRIDGE, "StashUnreal");
+                processingBridgeWebView = webView;
+            }
+            webView.evaluateJavascript(PROCESSING_WRAP_JS, null);
+        } catch (Exception e) {
+            Log.w(TAG, "Processing bridge attach failed: " + e.getMessage());
+        }
+    }
+
+    private static Activity getCheckoutPortraitActivity() {
+        WeakReference<Activity> ref = checkoutPortraitActivityRef;
+        return ref != null ? ref.get() : null;
+    }
+
+    private static void registerCheckoutActivityTracking(Activity activity) {
+        if (checkoutLifecycleRegistered || activity == null) {
+            return;
+        }
+        checkoutLifecycleRegistered = true;
+        activity.getApplication().registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
+            @Override
+            public void onActivityCreated(Activity createdActivity, Bundle savedInstanceState) {
+            }
+
+            @Override
+            public void onActivityStarted(Activity startedActivity) {
+            }
+
+            @Override
+            public void onActivityResumed(Activity resumedActivity) {
+                if (PORTRAIT_ACTIVITY_CLASS.equals(resumedActivity.getClass().getName())) {
+                    checkoutPortraitActivityRef = new WeakReference<>(resumedActivity);
+                    scheduleProcessingBridgeAttach();
+                }
+            }
+
+            @Override
+            public void onActivityPaused(Activity pausedActivity) {
+            }
+
+            @Override
+            public void onActivityStopped(Activity stoppedActivity) {
+            }
+
+            @Override
+            public void onActivitySaveInstanceState(Activity activityState, Bundle outState) {
+            }
+
+            @Override
+            public void onActivityDestroyed(Activity destroyedActivity) {
+                Activity portrait = getCheckoutPortraitActivity();
+                if (portrait == destroyedActivity) {
+                    checkoutPortraitActivityRef = null;
+                    processingBridgeWebView = null;
+                }
+            }
+        });
+    }
+
+    private static WebView readWebViewField(Object target, String fieldName) {
+        try {
+            Field field = target.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            return (WebView) field.get(target);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static WebView findWebViewInView(View view) {
+        if (view instanceof WebView) {
+            return (WebView) view;
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                WebView found = findWebViewInView(group.getChildAt(i));
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static WebView resolveCheckoutWebView() {
+        Activity portraitActivity = getCheckoutPortraitActivity();
+        if (portraitActivity != null) {
+            WebView portraitWebView = readWebViewField(portraitActivity, "webView");
+            if (portraitWebView != null) {
+                return portraitWebView;
+            }
+        }
+
+        try {
+            StashNativeCard card = StashNativeCard.getInstance();
+            Field pluginField = StashNativeCard.class.getDeclaredField("plugin");
+            pluginField.setAccessible(true);
+            Object plugin = pluginField.get(card);
+            if (plugin == null) {
+                return null;
+            }
+
+            WebView pluginWebView = readWebViewField(plugin, "webView");
+            if (pluginWebView != null) {
+                return pluginWebView;
+            }
+
+            Field dialogField = plugin.getClass().getDeclaredField("currentDialog");
+            dialogField.setAccessible(true);
+            android.app.Dialog dialog = (android.app.Dialog) dialogField.get(plugin);
+            if (dialog != null && dialog.getWindow() != null) {
+                return findWebViewInView(dialog.getWindow().getDecorView());
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "resolveCheckoutWebView failed: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private static boolean resolvePurchaseProcessing() {
+        Activity portraitActivity = getCheckoutPortraitActivity();
+        if (portraitActivity != null) {
+            try {
+                Field field = portraitActivity.getClass().getDeclaredField("isPurchaseProcessing");
+                field.setAccessible(true);
+                return field.getBoolean(portraitActivity);
+            } catch (Exception e) {
+                Log.w(TAG, "Failed to read portrait isPurchaseProcessing: " + e.getMessage());
+            }
+        }
+        try {
+            return StashNativeCard.getInstance().isPurchaseProcessing();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static void scheduleProcessingBridgeAttach() {
+        mainHandler.post(StashHelper::attachProcessingBridge);
+        mainHandler.postDelayed(StashHelper::attachProcessingBridge, 250);
+        mainHandler.postDelayed(StashHelper::attachProcessingBridge, 750);
+        mainHandler.postDelayed(StashHelper::attachProcessingBridge, 1500);
+        mainHandler.postDelayed(StashHelper::attachProcessingBridge, 3000);
+    }
+
+    private static final Runnable purchaseProcessingPollRunnable = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                StashNativeCard card = StashNativeCard.getInstance();
+                if (!card.isCurrentlyPresented()) {
+                    if (purchaseProcessingPollSeenPresentation) {
+                        if (lastReportedPurchaseProcessing) {
+                            reportPurchaseProcessingState(false);
+                        }
+                        purchaseProcessingPollActive = false;
+                        purchaseProcessingPollSeenPresentation = false;
+                        return;
+                    }
+                    if (purchaseProcessingPollActive) {
+                        mainHandler.postDelayed(this, PURCHASE_PROCESSING_POLL_MS);
+                    }
+                    return;
+                }
+
+                purchaseProcessingPollSeenPresentation = true;
+                attachProcessingBridge();
+                reportPurchaseProcessingState(resolvePurchaseProcessing());
+            } catch (Exception e) {
+                Log.w(TAG, "Purchase processing poll error: " + e.getMessage());
+            }
+            if (purchaseProcessingPollActive) {
+                mainHandler.postDelayed(this, PURCHASE_PROCESSING_POLL_MS);
+            }
+        }
+    };
+
+    private static void startPurchaseProcessingPoll() {
+        if (!purchaseProcessingPollActive) {
+            purchaseProcessingPollActive = true;
+            purchaseProcessingPollSeenPresentation = false;
+            mainHandler.post(purchaseProcessingPollRunnable);
+        }
+    }
+
+    private static void stopPurchaseProcessingPoll() {
+        purchaseProcessingPollActive = false;
+        purchaseProcessingPollSeenPresentation = false;
+        mainHandler.removeCallbacks(purchaseProcessingPollRunnable);
+    }
 
     /**
      * Initializes the Stash Native SDK with the given activity.
@@ -63,8 +329,9 @@ public class StashHelper {
                 return;
             }
 
-            Log.d(TAG, "Initializing StashHelper (Stash Native 2.2.3)");
+            Log.d(TAG, "Initializing StashHelper (Stash Native 2.2.4)");
 
+            registerCheckoutActivityTracking(activity);
             StashNativeCard card = StashNativeCard.getInstance();
             card.setActivity(activity);
             card.setListener(new StashNativeCard.StashNativeCardListenerAdapter() {
@@ -92,6 +359,10 @@ public class StashHelper {
                 @Override
                 public void onDialogDismissed() {
                     Log.d(TAG, "Card/modal dismissed");
+                    stopPurchaseProcessingPoll();
+                    if (lastReportedPurchaseProcessing) {
+                        reportPurchaseProcessingState(false);
+                    }
                     Log.i(TAG, BTAG + " onDialogDismissed → scheduling clearCheckoutBackdropInternal (thread="
                             + Thread.currentThread().getName() + ")");
                     try {
@@ -120,6 +391,7 @@ public class StashHelper {
                     } catch (Exception e) {
                         Log.e(TAG, "Error calling native onPageLoaded: " + e.getMessage());
                     }
+                    scheduleProcessingBridgeAttach();
                 }
 
                 @Override
@@ -176,6 +448,8 @@ public class StashHelper {
         activity.runOnUiThread(() -> {
             try {
                 StashNativeCard.getInstance().openCard(url, null);
+                startPurchaseProcessingPoll();
+                scheduleProcessingBridgeAttach();
             } catch (Exception e) {
                 Log.e(TAG, "Error opening card: " + e.getMessage());
             }
@@ -242,6 +516,8 @@ public class StashHelper {
                     config.backgroundColor = backgroundColor;
                 }
                 StashNativeCard.getInstance().openCard(url, config);
+                startPurchaseProcessingPoll();
+                scheduleProcessingBridgeAttach();
                 Log.i(TAG, BTAG + " openCard() returned (config.forcePortrait=" + config.forcePortrait + ")");
             } catch (Exception e) {
                 Log.e(TAG, BTAG + " Error opening card with config: " + e.getMessage(), e);
@@ -434,6 +710,7 @@ public class StashHelper {
         activity.runOnUiThread(() -> {
             try {
                 StashNativeCard.getInstance().openModal(url, null);
+                startPurchaseProcessingPoll();
             } catch (Exception e) {
                 Log.e(TAG, "Error opening modal: " + e.getMessage());
             }
@@ -479,6 +756,7 @@ public class StashHelper {
                     config.backgroundColor = backgroundColor;
                 }
                 StashNativeCard.getInstance().openModal(url, config);
+                startPurchaseProcessingPoll();
             } catch (Exception e) {
                 Log.e(TAG, "Error opening modal with config: " + e.getMessage());
             }

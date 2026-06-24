@@ -12,6 +12,9 @@
 #include "StashEditorPreviewBridge.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#else
+#include "Engine/Engine.h"
+#include "Engine/World.h"
 #endif
 
 #if PLATFORM_ANDROID

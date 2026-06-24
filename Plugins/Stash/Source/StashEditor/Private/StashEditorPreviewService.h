@@ -74,6 +74,8 @@ public:
 	void SetCardSheetExpandedFromSdk(bool bExpanded);
 	void SimulatePaymentSuccess();
 	void SimulatePaymentFailure();
+	void SimulatePurchaseProcessing();
+	void SimulateProcessingCompleted();
 	void SimulateOptInResponse(const FString& OptInType);
 	void SimulateDismiss();
 

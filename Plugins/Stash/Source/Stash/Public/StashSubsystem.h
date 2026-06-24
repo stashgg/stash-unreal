@@ -47,4 +47,12 @@ public:
 	/** Called when checkout requests an external payment URL. Bind in Blueprint via Add On External Payment. */
 	UPROPERTY(BlueprintAssignable, Category = "Stash")
 	FOnStashExternalPayment OnExternalPayment;
+
+	/** Called when checkout enters purchase processing (dialog cannot be dismissed). Bind via Add On Purchase Processing. */
+	UPROPERTY(BlueprintAssignable, Category = "Stash")
+	FOnStashPurchaseProcessing OnPurchaseProcessing;
+
+	/** Called when purchase processing completes without a success/failure result. Bind via Add On Processing Completed. */
+	UPROPERTY(BlueprintAssignable, Category = "Stash")
+	FOnStashProcessingCompleted OnProcessingCompleted;
 };
