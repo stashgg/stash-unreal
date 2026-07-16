@@ -15,6 +15,11 @@ struct FStashPreviewSession
 	bool bKeepAliveEnabled = false;
 	bool bForcePortraitLayout = false;
 	bool bAllowDismiss = true;
+	/** Platform of the selected preview device; drives Close Browser / back button / keep-alive semantics. */
+	EStashPreviewPlatform ActivePlatform = EStashPreviewPlatform::iOS;
+	/** Simulated soft keyboard (driven by checkout page focus events or the manual toggle). */
+	bool bKeyboardVisible = false;
+	FString KeyboardInputType;
 	FStashKeepAliveConfig KeepAliveConfig;
 	TArray<uint8> BackdropBytes;
 	FString CurrentUrl;
@@ -24,15 +29,6 @@ struct FStashPreviewSession
 	double LoadStartSeconds = 0.0;
 	bool bPageLoadedFired = false;
 };
-
-/** Device preset dimensions (points, portrait). */
-struct FStashPreviewDeviceSize
-{
-	float Width = 390.f;
-	float Height = 844.f;
-};
-
-FStashPreviewDeviceSize StashPreviewGetDeviceSize(EStashPreviewDevicePreset Preset, float CustomWidth, float CustomHeight);
 
 class SStashPreviewPanel;
 
@@ -72,6 +68,16 @@ public:
 	void NotifyLoadCompleted();
 	void NotifyLoadError();
 	void SetCardSheetExpandedFromSdk(bool bExpanded);
+	/** Panel writes through the platform of the selected device preset. */
+	void SetActivePlatform(EStashPreviewPlatform Platform);
+	/** Panel writes through the selected device's mobile emulation params; the CEF request-context delegate reads these. */
+	void SetPreviewDeviceEmulation(const FString& UserAgent, bool bMobile, const FString& PlatformHint);
+	const FString& GetPreviewUserAgent() const { return PreviewUserAgent; }
+	bool IsPreviewMobile() const { return bPreviewMobile; }
+	const FString& GetPreviewPlatformHint() const { return PreviewPlatformHint; }
+	/** Simulated Android back gesture: hides the keyboard first, then dismisses like the device back button. */
+	void HandleAndroidBack();
+	void SetKeyboardVisible(bool bVisible, const FString& InputType);
 	void SimulatePaymentSuccess();
 	void SimulatePaymentFailure();
 	void SimulatePurchaseProcessing();
@@ -94,4 +100,9 @@ public:
 	FString LastPreviewCallbackDedupKey;
 	double LastPreviewCallbackTime = -1.0;
 	static constexpr double PreviewCallbackDedupSeconds = 0.25;
+
+	/** Mobile emulation for the CEF webview — device-scoped (not per session), read by the request-context header injector. */
+	FString PreviewUserAgent;
+	bool bPreviewMobile = true;
+	FString PreviewPlatformHint = TEXT("iOS");
 };

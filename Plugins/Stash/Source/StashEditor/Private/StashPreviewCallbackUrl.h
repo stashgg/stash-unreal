@@ -23,6 +23,12 @@ namespace StashPreviewCallbackUrl
 		return Path + TEXT("\x1f") + Query;
 	}
 
+	/** Passive callbacks arrive via console.log only, never navigation — the webview must not be reloaded for them. */
+	inline bool IsPassiveCallbackPath(const FString& Path)
+	{
+		return Path == TEXT("keyboardShow") || Path == TEXT("keyboardHide");
+	}
+
 	inline bool ParsePreviewCallbackUrl(const FString& Url, FString& OutPath, FString& OutQuery)
 	{
 		if (!Url.StartsWith(StashPreviewJsBridge::SchemePrefix))

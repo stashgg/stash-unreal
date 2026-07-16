@@ -14,21 +14,6 @@
 #include "Async/Async.h"
 #include "Modules/ModuleManager.h"
 
-FStashPreviewDeviceSize StashPreviewGetDeviceSize(EStashPreviewDevicePreset Preset, float CustomWidth, float CustomHeight)
-{
-	switch (Preset)
-	{
-	case EStashPreviewDevicePreset::iPhoneSE:       return {375.f, 667.f};
-	case EStashPreviewDevicePreset::iPhone14ProMax: return {430.f, 932.f};
-	case EStashPreviewDevicePreset::iPhone14Pro:    return {393.f, 852.f};
-	case EStashPreviewDevicePreset::iPad:           return {810.f, 1080.f};
-	case EStashPreviewDevicePreset::iPadPro:        return {1024.f, 1366.f};
-	case EStashPreviewDevicePreset::Custom:         return {CustomWidth, CustomHeight};
-	case EStashPreviewDevicePreset::iPhone14:
-	default:                                        return {390.f, 844.f};
-	}
-}
-
 TSharedRef<FStashEditorPreviewService> FStashEditorPreviewService::Get()
 {
 	static TSharedRef<FStashEditorPreviewService> Instance = MakeShared<FStashEditorPreviewService>();
@@ -93,6 +78,8 @@ bool FStashEditorPreviewService::PrepareSession(const FString& URL, EStashPrevie
 	Session.bIsPurchaseProcessing = false;
 	Session.bForcePortraitLayout = false;
 	Session.bAllowDismiss = true;
+	Session.bKeyboardVisible = false;
+	Session.KeyboardInputType.Reset();
 	Session.CurrentUrl = Normalized;
 	Session.PresentationMode = Mode;
 	Session.LoadStartSeconds = FApp::GetCurrentTime();
@@ -168,6 +155,8 @@ void FStashEditorPreviewService::EndSession(bool bFireDismiss)
 	}
 	Session.bIsOpen = false;
 	Session.bIsPurchaseProcessing = false;
+	Session.bKeyboardVisible = false;
+	Session.KeyboardInputType.Reset();
 	RefreshAllPanels();
 	if (bFireDismiss)
 	{
@@ -183,6 +172,12 @@ bool FStashEditorPreviewService::CloseBrowser()
 {
 	if (Session.bIsOpen && Session.PresentationMode == EStashPreviewPresentationMode::Browser)
 	{
+		if (Session.ActivePlatform == EStashPreviewPlatform::Android)
+		{
+			// Chrome Custom Tabs cannot be closed by the app — mirror the device no-op.
+			UE_LOG(LogStashEditor, Warning, TEXT("[StashPreview] CloseBrowser is a no-op on Android (Chrome Custom Tabs). Use the simulated back button or Dismiss to close the preview."));
+			return true;
+		}
 		EndSession(true);
 		return true;
 	}
@@ -217,21 +212,73 @@ bool FStashEditorPreviewService::IsPurchaseProcessing() const
 void FStashEditorPreviewService::SetLandscapeLockWhenCardClosed(bool bEnable)
 {
 	Session.bLandscapeLockWhenCardClosed = bEnable;
-	UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] SetLandscapeLockWhenCardClosed (editor stub): %d"), bEnable ? 1 : 0);
+	UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] SetLandscapeLockWhenCardClosed: %d (preview device stays landscape while no Stash UI is open)"), bEnable ? 1 : 0);
 	RefreshAllPanels();
 }
 
 void FStashEditorPreviewService::SetAndroidKeepAliveEnabled(bool bEnabled)
 {
 	Session.bKeepAliveEnabled = bEnabled;
-	UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] SetAndroidKeepAliveEnabled (editor stub): %d"), bEnabled ? 1 : 0);
+	UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] SetAndroidKeepAliveEnabled: %d (shown as a notification mock on Android presets in Browser mode)"), bEnabled ? 1 : 0);
 	RefreshAllPanels();
 }
 
 void FStashEditorPreviewService::SetAndroidKeepAliveConfig(const FStashKeepAliveConfig& Config)
 {
 	Session.KeepAliveConfig = Config;
-	UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] SetAndroidKeepAliveConfig (editor stub): title=%s"), *Config.NotificationTitle);
+	UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] SetAndroidKeepAliveConfig: title=%s"), *Config.NotificationTitle);
+	RefreshAllPanels();
+}
+
+void FStashEditorPreviewService::SetActivePlatform(EStashPreviewPlatform Platform)
+{
+	if (Session.ActivePlatform != Platform)
+	{
+		Session.ActivePlatform = Platform;
+		RefreshAllPanels();
+	}
+}
+
+void FStashEditorPreviewService::SetPreviewDeviceEmulation(const FString& UserAgent, bool bMobile, const FString& PlatformHint)
+{
+	PreviewUserAgent = UserAgent;
+	bPreviewMobile = bMobile;
+	PreviewPlatformHint = PlatformHint;
+}
+
+void FStashEditorPreviewService::HandleAndroidBack()
+{
+	if (!Session.bIsOpen)
+	{
+		return;
+	}
+	if (Session.bKeyboardVisible)
+	{
+		SetKeyboardVisible(false, FString());
+		return;
+	}
+	if (Session.bIsPurchaseProcessing)
+	{
+		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Back ignored while purchase is processing"));
+		return;
+	}
+	if (Session.PresentationMode == EStashPreviewPresentationMode::Modal && !Session.bAllowDismiss)
+	{
+		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Back ignored (modal allowDismiss=false)"));
+		return;
+	}
+	UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Back → dismiss"));
+	EndSession(true);
+}
+
+void FStashEditorPreviewService::SetKeyboardVisible(bool bVisible, const FString& InputType)
+{
+	if (Session.bKeyboardVisible == bVisible && Session.KeyboardInputType == InputType)
+	{
+		return;
+	}
+	Session.bKeyboardVisible = bVisible;
+	Session.KeyboardInputType = bVisible ? InputType : FString();
 	RefreshAllPanels();
 }
 
@@ -417,6 +464,17 @@ void FStashEditorPreviewService::NotifyUrlChanged(const FString& Url)
 		Session.bIsPurchaseProcessing = false;
 		UStashBlueprint::HandleProcessingCompleted();
 		RefreshAllPanels();
+	}
+	else if (Path == TEXT("keyboardShow"))
+	{
+		const FString InputType = ParseQueryParam(TEXT("type"));
+		UE_LOG(LogStashEditor, Verbose, TEXT("[StashPreview] Callback: keyboardShow (type=%s)"), *InputType);
+		SetKeyboardVisible(true, InputType);
+	}
+	else if (Path == TEXT("keyboardHide"))
+	{
+		UE_LOG(LogStashEditor, Verbose, TEXT("[StashPreview] Callback: keyboardHide"));
+		SetKeyboardVisible(false, FString());
 	}
 	else
 	{

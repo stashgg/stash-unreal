@@ -6,6 +6,14 @@
 #include "Engine/DeveloperSettings.h"
 #include "StashEditorSettings.generated.h"
 
+/** Mobile platform the preview device emulates (drives back button, Close Browser semantics, keep-alive, chrome styling). */
+UENUM(BlueprintType)
+enum class EStashPreviewPlatform : uint8
+{
+	iOS     UMETA(DisplayName = "iOS"),
+	Android UMETA(DisplayName = "Android")
+};
+
 UENUM(BlueprintType)
 enum class EStashPreviewDevicePreset : uint8
 {
@@ -15,6 +23,10 @@ enum class EStashPreviewDevicePreset : uint8
 	iPhone14Pro    UMETA(DisplayName = "iPhone 14 Pro (393x852)"),
 	iPad           UMETA(DisplayName = "iPad (810x1080)"),
 	iPadPro        UMETA(DisplayName = "iPad Pro (1024x1366)"),
+	Pixel8         UMETA(DisplayName = "Pixel 8 (412x915)"),
+	GalaxyS24      UMETA(DisplayName = "Galaxy S24 (360x780)"),
+	PixelTablet    UMETA(DisplayName = "Pixel Tablet (800x1280)"),
+	GalaxyTabS9    UMETA(DisplayName = "Galaxy Tab S9 (800x1280)"),
 	Custom         UMETA(DisplayName = "Custom")
 };
 
@@ -42,9 +54,21 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Editor Preview")
 	bool bAutoOpenPreviewTab = true;
 
+	/** Show phone chrome around the preview: bezel, status bar, notch/punch-hole, and home indicator / gesture bar. */
+	UPROPERTY(Config, EditAnywhere, Category = "Editor Preview")
+	bool bShowDeviceChrome = true;
+
+	/** Overlay faint guide lines at the safe-area inset boundaries (debugging aid). */
+	UPROPERTY(Config, EditAnywhere, Category = "Editor Preview")
+	bool bShowSafeAreaGuides = false;
+
 	/** Default device frame used when the preview tab opens. */
 	UPROPERTY(Config, EditAnywhere, Category = "Editor Preview")
 	EStashPreviewDevicePreset DefaultDevicePreset = EStashPreviewDevicePreset::iPhone14;
+
+	/** Platform the Custom device emulates. */
+	UPROPERTY(Config, EditAnywhere, Category = "Editor Preview", meta = (EditCondition = "DefaultDevicePreset == EStashPreviewDevicePreset::Custom"))
+	EStashPreviewPlatform CustomDevicePlatform = EStashPreviewPlatform::iOS;
 
 	/** Custom device width when Default Device Preset is Custom. */
 	UPROPERTY(Config, EditAnywhere, Category = "Editor Preview", meta = (EditCondition = "DefaultDevicePreset == EStashPreviewDevicePreset::Custom", ClampMin = "200", ClampMax = "2048"))

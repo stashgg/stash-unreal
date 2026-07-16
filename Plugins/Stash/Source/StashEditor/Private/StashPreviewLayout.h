@@ -6,6 +6,7 @@
 #include "StashBlueprint.h"
 #include "StashEditorSettings.h"
 #include "StashEditorPreviewBridge.h"
+#include "StashPreviewDeviceCatalog.h"
 
 struct FStashPreviewSheetLayout
 {
@@ -17,31 +18,25 @@ struct FStashPreviewSheetLayout
 	bool bIsModal = false;
 	bool bCardBottomDrawer = false;
 	bool bShowDragHandle = false;
+	/** Effective safe-area insets for the current orientation (status bar / home indicator / gesture bar). */
+	FMargin SafeArea = FMargin(0.f);
 };
-
-bool StashPreviewIsTabletDevice(
-	EStashPreviewDevicePreset Preset,
-	float CustomDeviceWidth,
-	float CustomDeviceHeight);
 
 FStashPreviewSheetLayout StashPreviewComputeCardLayout(
 	const FStashCardConfig& Config,
-	float DeviceW,
-	float DeviceH,
-	bool bDeviceLandscape,
-	bool bIsTabletDevice);
+	const FStashPreviewDeviceSpec& Spec,
+	bool bDeviceLandscape);
 
 FStashPreviewSheetLayout StashPreviewComputeModalLayout(
 	const FStashModalConfig& Config,
-	float DeviceW,
-	float DeviceH,
-	bool bDeviceLandscape,
-	bool bIsTabletDevice);
+	const FStashPreviewDeviceSpec& Spec,
+	bool bDeviceLandscape);
 
 FString StashPreviewDescribeActiveConfig(
 	EStashPreviewPresentationMode Mode,
 	const FStashPreviewSheetLayout& Layout,
 	const FStashCardConfig& CardConfig,
 	const FStashModalConfig& ModalConfig,
+	const FStashPreviewDeviceSpec& Spec,
 	bool bDeviceLandscape,
 	bool bForcePortrait);

@@ -1,7 +1,11 @@
 // Copyright Stash. All Rights Reserved.
 #include "SStashPreviewPanel.h"
 #include "SStashPreviewDraggableSheet.h"
+#include "SStashPreviewKeyboard.h"
+#include "SStashPreviewStatusIcons.h"
+#include "SStashPreviewCornerMask.h"
 #include "StashEditorPreviewService.h"
+#include "StashPreviewDeviceCatalog.h"
 #include "StashPreviewJsBridge.h"
 #include "StashPreviewCallbackUrl.h"
 #include "StashPreviewLayout.h"
@@ -19,8 +23,12 @@
 #if STASH_HAS_WEBBROWSER
 #include "SWebBrowser.h"
 #include "WebBrowserModule.h"
+#include "IWebBrowserSingleton.h"
+#include "IWebBrowserWindow.h"
+#include "IWebBrowserResourceLoader.h"
 #endif
 #include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SBorder.h"
@@ -31,6 +39,7 @@
 #include "Widgets/SOverlay.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Styling/AppStyle.h"
+#include "Styling/CoreStyle.h"
 namespace
 {
 	FString ModeLabel(EStashPreviewPresentationMode Mode)
@@ -42,43 +51,79 @@ namespace
 		default:                                     return TEXT("Card");
 		}
 	}
-	EStashPreviewDevicePreset PresetFromLabel(const FString& Label)
+	FString PlatformLabel(EStashPreviewPlatform Platform)
 	{
-		if (Label.Contains(TEXT("SE"))) return EStashPreviewDevicePreset::iPhoneSE;
-		if (Label.Contains(TEXT("Pro Max"))) return EStashPreviewDevicePreset::iPhone14ProMax;
-		if (Label.Contains(TEXT("Pro"))) return EStashPreviewDevicePreset::iPhone14Pro;
-		if (Label.Contains(TEXT("iPad Pro"))) return EStashPreviewDevicePreset::iPadPro;
-		if (Label.Contains(TEXT("iPad"))) return EStashPreviewDevicePreset::iPad;
-		if (Label.Contains(TEXT("Custom"))) return EStashPreviewDevicePreset::Custom;
-		return EStashPreviewDevicePreset::iPhone14;
+		return Platform == EStashPreviewPlatform::Android ? TEXT("Android") : TEXT("iOS");
 	}
+	FString PresetOptionLabel(const FStashPreviewDeviceSpec& Spec)
+	{
+		return FString::Printf(TEXT("%s — %s"), *PlatformLabel(Spec.Platform), *Spec.DisplayName);
+	}
+
+	/** Presets in combo order: catalog entries followed by Custom. */
+	TArray<EStashPreviewDevicePreset> BuildPresetOrder()
+	{
+		TArray<EStashPreviewDevicePreset> Order;
+		for (const FStashPreviewDeviceSpec& Spec : StashPreviewGetDeviceCatalog())
+		{
+			Order.Add(Spec.Preset);
+		}
+		Order.Add(EStashPreviewDevicePreset::Custom);
+		return Order;
+	}
+
+#if STASH_HAS_WEBBROWSER
+	/**
+	 * CEF request-context callback (game thread): stamps the selected device's mobile user-agent and
+	 * client-hint headers onto every request so the checkout page serves its true iOS/Android experience.
+	 * Reads the singleton service, so it stays valid across preview-panel lifetimes.
+	 */
+	void StashPreviewInjectMobileHeaders(FString /*Url*/, FString /*ResourceType*/, FContextRequestHeaders& AdditionalHeaders, const bool /*bAllowCredentials*/)
+	{
+		const TSharedRef<FStashEditorPreviewService> Service = FStashEditorPreviewService::Get();
+		const FString& UserAgent = Service->GetPreviewUserAgent();
+		if (UserAgent.IsEmpty())
+		{
+			return;
+		}
+		AdditionalHeaders.Add(TEXT("User-Agent"), UserAgent);
+		AdditionalHeaders.Add(TEXT("sec-ch-ua-mobile"), Service->IsPreviewMobile() ? TEXT("?1") : TEXT("?0"));
+		AdditionalHeaders.Add(TEXT("sec-ch-ua-platform"), FString::Printf(TEXT("\"%s\""), *Service->GetPreviewPlatformHint()));
+	}
+#endif
 }
 void SStashPreviewPanel::Construct(const FArguments& InArgs)
 {
 	const UStashEditorSettings* Settings = GetDefault<UStashEditorSettings>();
 	DevicePreset = Settings ? Settings->DefaultDevicePreset : EStashPreviewDevicePreset::iPhone14;
-	DevicePresetOptions = {
-		MakeShared<FString>(TEXT("iPhone SE (375x667)")),
-		MakeShared<FString>(TEXT("iPhone 14 (390x844)")),
-		MakeShared<FString>(TEXT("iPhone 14 Pro Max (430x932)")),
-		MakeShared<FString>(TEXT("iPhone 14 Pro (393x852)")),
-		MakeShared<FString>(TEXT("iPad (810x1080)")),
-		MakeShared<FString>(TEXT("iPad Pro (1024x1366)")),
-		MakeShared<FString>(TEXT("Custom"))
-	};
-	for (const TSharedPtr<FString>& Opt : DevicePresetOptions)
+
+	DevicePresetOptions.Reset();
+	int32 SelectedIndex = INDEX_NONE;
+	const TArray<EStashPreviewDevicePreset> PresetOrder = BuildPresetOrder();
+	for (int32 Index = 0; Index < PresetOrder.Num(); ++Index)
 	{
-		if (PresetFromLabel(*Opt) == DevicePreset)
+		const EStashPreviewDevicePreset Preset = PresetOrder[Index];
+		const FString Label = Preset == EStashPreviewDevicePreset::Custom
+			? FString(TEXT("Custom (Project Settings)"))
+			: PresetOptionLabel(StashPreviewGetDeviceSpec(Preset, EStashPreviewPlatform::iOS, 0.f, 0.f));
+		DevicePresetOptions.Add(MakeShared<FString>(Label));
+		if (Preset == DevicePreset)
 		{
-			SelectedDevicePreset = Opt;
-			break;
+			SelectedIndex = Index;
 		}
 	}
-	if (!SelectedDevicePreset.IsValid())
+	if (SelectedIndex == INDEX_NONE)
 	{
-		SelectedDevicePreset = DevicePresetOptions[1];
+		DevicePreset = EStashPreviewDevicePreset::iPhone14;
+		SelectedIndex = PresetOrder.IndexOfByKey(DevicePreset);
 	}
+	SelectedDevicePreset = DevicePresetOptions[SelectedIndex];
+
+	RebuildDeviceChromeBrushes();
 	FStashEditorPreviewService::Get()->RegisterPreviewPanel(SharedThis(this));
+	LastSyncedActivePlatform = GetSelectedDeviceSpec().Platform;
+	FStashEditorPreviewService::Get()->SetActivePlatform(LastSyncedActivePlatform);
+	PushDeviceEmulation(false);
 	ChildSlot
 	[
 		SNew(SSplitter)
@@ -101,8 +146,79 @@ void SStashPreviewPanel::RefreshFromSession()
 	const FStashPreviewSession& Session = FStashEditorPreviewService::Get()->GetSession();
 	if (Session.bIsOpen && Session.bForcePortraitLayout)
 	{
-		bDeviceLandscape = false;
+		// A real device only flashes when it was actually landscape before the forced rotation — whether
+		// that came from the manual toggle (bDeviceLandscape) or a native landscape lock
+		// (bLandscapeLockWhenCardClosed). The episode latch keeps it a one-shot per rotation.
+		const bool bWasLandscape = bDeviceLandscape || Session.bLandscapeLockWhenCardClosed;
+		if (bWasLandscape && !bForcePortraitEpisodeActive)
+		{
+			bForcePortraitEpisodeActive = true;
+			if (bDeviceLandscape)
+			{
+				// Only the manual toggle needs restoring; the landscape lock restores itself when the card closes.
+				bRestoreLandscapeAfterSession = true;
+				bDeviceLandscape = false;
+			}
+			if (IsAndroidPreset() && Session.BackdropBytes.Num() == 0)
+			{
+				// Without a backdrop bitmap the real Android rotation flashes white.
+				BackdropFlashRemaining = BackdropFlashSeconds;
+				bShowBackdropFlashHint = true;
+			}
+		}
 	}
+	else
+	{
+		// Not in a forced-portrait card: clear the latch so a later rotation can flash again.
+		bForcePortraitEpisodeActive = false;
+		if (!Session.bIsOpen)
+		{
+			if (bRestoreLandscapeAfterSession)
+			{
+				bRestoreLandscapeAfterSession = false;
+				bDeviceLandscape = true;
+			}
+			BackdropFlashRemaining = -1.f;
+		}
+	}
+	if (Session.bIsOpen && Session.BackdropBytes.Num() > 0)
+	{
+		bShowBackdropFlashHint = false;
+	}
+
+	const bool bKeyboardNowVisible = Session.bIsOpen && Session.bKeyboardVisible;
+	if (bKeyboardNowVisible && !bLastKeyboardVisible)
+	{
+		// Real sheets rise so the focused field clears the keyboard — raise the drawer card too.
+		if (IsCardPresentation() && ComputeCardBaseLayout().bCardBottomDrawer
+			&& IsCardExpandDragEnabled() && !bCardExpandedToMax && CardDragHeightOverride <= 0.f)
+		{
+			bAutoExpandedForKeyboard = true;
+			ApplyCardSheetExpandedState(true);
+		}
+#if STASH_HAS_WEBBROWSER
+		if (WebBrowser.IsValid())
+		{
+			// Mirror WKWebView/Chrome: keep the focused field visible above the keyboard.
+			WebBrowser->ExecuteJavascript(TEXT("setTimeout(function(){var el=document.activeElement;if(el&&el.scrollIntoView){try{el.scrollIntoView({block:'nearest'});}catch(e){}}},50);"));
+		}
+#endif
+	}
+	else if (!bKeyboardNowVisible && bLastKeyboardVisible && bAutoExpandedForKeyboard)
+	{
+		// Collapse back only if the keyboard was what expanded the card.
+		bAutoExpandedForKeyboard = false;
+		if (IsCardPresentation())
+		{
+			ApplyCardSheetExpandedState(false);
+		}
+	}
+	if (bKeyboardNowVisible != bLastKeyboardVisible)
+	{
+		LastSyncedViewportSize = FVector2D::ZeroVector;
+	}
+	bLastKeyboardVisible = bKeyboardNowVisible;
+
 	const EStashPreviewPresentationMode PreviousMode = LastPresentationMode;
 	if (Session.bIsOpen
 		&& Session.PresentationMode == EStashPreviewPresentationMode::Card
@@ -141,19 +257,88 @@ void SStashPreviewPanel::RefreshFromSession()
 		}
 	}
 }
-bool SStashPreviewPanel::IsTabletDevice() const
+const FStashPreviewDeviceSpec& SStashPreviewPanel::GetSelectedDeviceSpec() const
+{
+	return CachedDeviceSpec;
+}
+void SStashPreviewPanel::RefreshCachedDeviceSpec()
 {
 	const UStashEditorSettings* Settings = GetDefault<UStashEditorSettings>();
-	const float CustomW = Settings ? Settings->CustomDeviceWidth : 390.f;
-	const float CustomH = Settings ? Settings->CustomDeviceHeight : 844.f;
-	return StashPreviewIsTabletDevice(DevicePreset, CustomW, CustomH);
+	CachedDeviceSpec = StashPreviewGetDeviceSpec(
+		DevicePreset,
+		Settings ? Settings->CustomDevicePlatform : EStashPreviewPlatform::iOS,
+		Settings ? Settings->CustomDeviceWidth : 390.f,
+		Settings ? Settings->CustomDeviceHeight : 844.f);
+}
+bool SStashPreviewPanel::IsTabletDevice() const
+{
+	return GetSelectedDeviceSpec().bTablet;
+}
+bool SStashPreviewPanel::IsAndroidPreset() const
+{
+	return GetSelectedDeviceSpec().Platform == EStashPreviewPlatform::Android;
+}
+bool SStashPreviewPanel::IsDeviceChromeEnabled() const
+{
+	const UStashEditorSettings* Settings = GetDefault<UStashEditorSettings>();
+	return Settings && Settings->bShowDeviceChrome;
+}
+FMargin SStashPreviewPanel::GetEffectiveInsets() const
+{
+	return GetSelectedDeviceSpec().GetInsets(GetEffectiveLandscape());
+}
+bool SStashPreviewPanel::IsStatusContentLight() const
+{
+	const FStashPreviewSession& Session = FStashEditorPreviewService::Get()->GetSession();
+	// Card/modal draw the status bar over the dim overlay (dark). Browser is full-bleed over the
+	// checkout page, which is light in practice — so status glyphs must go dark to stay legible.
+	return Session.bIsOpen && Session.PresentationMode == EStashPreviewPresentationMode::Browser;
+}
+FLinearColor SStashPreviewPanel::GetStatusGlyphColor() const
+{
+	return IsStatusContentLight()
+		? FLinearColor(0.05f, 0.05f, 0.06f, 1.f)
+		: FLinearColor::White;
+}
+float SStashPreviewPanel::GetStatusCutoutWidth() const
+{
+	if (GetEffectiveLandscape())
+	{
+		return 0.f;
+	}
+	switch (GetSelectedDeviceSpec().NotchType)
+	{
+	case EStashPreviewNotchType::Notch:         return FMath::Clamp(GetSelectedDeviceSize().X * 0.45f, 120.f, 180.f);
+	case EStashPreviewNotchType::DynamicIsland: return 125.f;
+	case EStashPreviewNotchType::PunchHole:     return 24.f;
+	default:                                    return 0.f;
+	}
+}
+bool SStashPreviewPanel::ShouldShowCellular() const
+{
+	// Tablets are treated as wifi-only (no cellular glyph).
+	return !GetSelectedDeviceSpec().bTablet;
+}
+float SStashPreviewPanel::GetKeyboardHeight() const
+{
+	const FStashPreviewDeviceSpec Spec = GetSelectedDeviceSpec();
+	const bool bLandscape = GetEffectiveLandscape();
+	const float SpecHeight = Spec.GetKeyboardHeight(bLandscape);
+	// Never let the keyboard swallow more than half the (short) landscape screen.
+	const float Cap = Spec.GetSize(bLandscape).Y * 0.5f;
+	return FMath::Min(SpecHeight, Cap);
 }
 bool SStashPreviewPanel::GetEffectiveLandscape() const
 {
 	const FStashPreviewSession& Session = FStashEditorPreviewService::Get()->GetSession();
-	if (Session.bForcePortraitLayout)
+	if (Session.bIsOpen && Session.bForcePortraitLayout)
 	{
 		return false;
+	}
+	if (Session.bLandscapeLockWhenCardClosed)
+	{
+		// Native landscape lock keeps the game landscape-only except while a force-portrait card is presented.
+		return true;
 	}
 	return bDeviceLandscape;
 }
@@ -177,18 +362,18 @@ bool SStashPreviewPanel::IsCardExpandDragEnabled() const
 FStashPreviewSheetLayout SStashPreviewPanel::ComputeCardBaseLayout() const
 {
 	const FStashPreviewSession& Session = FStashEditorPreviewService::Get()->GetSession();
-	const FVector2D DeviceSize = GetSelectedDeviceSize();
 	return StashPreviewComputeCardLayout(
 		Session.CardConfig,
-		DeviceSize.X,
-		DeviceSize.Y,
-		GetEffectiveLandscape(),
-		IsTabletDevice());
+		GetSelectedDeviceSpec(),
+		GetEffectiveLandscape());
 }
 
 float SStashPreviewPanel::GetCardMaxExpandedHeight() const
 {
-	return GetSelectedDeviceSize().Y * CardMaxExpandHeightRatio;
+	const FVector2D DeviceSize = GetSelectedDeviceSize();
+	const FMargin Insets = GetEffectiveInsets();
+	// Native expand never rises into the status-bar / notch zone.
+	return FMath::Min(DeviceSize.Y * CardMaxExpandHeightRatio, DeviceSize.Y - Insets.Top);
 }
 bool SStashPreviewPanel::IsCardPresentation() const
 {
@@ -223,19 +408,18 @@ FStashPreviewSheetLayout SStashPreviewPanel::ComputeCurrentLayout() const
 		return FStashPreviewSheetLayout();
 	}
 
-	const FVector2D DeviceSize = GetSelectedDeviceSize();
-	const float DeviceW = DeviceSize.X;
-	const float DeviceH = DeviceSize.Y;
-	const bool bIsTablet = IsTabletDevice();
+	const FStashPreviewDeviceSpec Spec = GetSelectedDeviceSpec();
 	const bool bEffectiveLandscape = GetEffectiveLandscape();
+	const FVector2D DeviceSize = Spec.GetSize(bEffectiveLandscape);
 
 	if (Session.PresentationMode == EStashPreviewPresentationMode::Browser)
 	{
 		FStashPreviewSheetLayout Layout;
-		Layout.Width = DeviceW;
-		Layout.Height = DeviceH;
+		Layout.Width = DeviceSize.X;
+		Layout.Height = DeviceSize.Y;
 		Layout.HAlign = HAlign_Fill;
 		Layout.VAlign = VAlign_Fill;
+		Layout.SafeArea = Spec.GetInsets(bEffectiveLandscape);
 		return Layout;
 	}
 	if (Session.PresentationMode == EStashPreviewPresentationMode::Card)
@@ -256,8 +440,7 @@ FStashPreviewSheetLayout SStashPreviewPanel::ComputeCurrentLayout() const
 		}
 		return Layout;
 	}
-	return StashPreviewComputeModalLayout(
-		Session.ModalConfig, DeviceW, DeviceH, bEffectiveLandscape, bIsTablet);
+	return StashPreviewComputeModalLayout(Session.ModalConfig, Spec, bEffectiveLandscape);
 }
 
 FMargin SStashPreviewPanel::ComputeSheetPadding(const FStashPreviewSheetLayout& Layout) const
@@ -265,24 +448,83 @@ FMargin SStashPreviewPanel::ComputeSheetPadding(const FStashPreviewSheetLayout& 
 	const FVector2D DeviceSize = GetSelectedDeviceSize();
 	const float DeviceW = DeviceSize.X;
 	const float DeviceH = DeviceSize.Y;
+	const FStashPreviewSession& Session = FStashEditorPreviewService::Get()->GetSession();
+	const FMargin Insets = Layout.SafeArea;
 	FMargin Padding(0.f);
+
+	if (Layout.VAlign == VAlign_Fill && Layout.HAlign == HAlign_Fill)
+	{
+		// Browser: full bleed; the keyboard shrinks it from the bottom (adjustResize / visualViewport).
+		if (Session.bKeyboardVisible)
+		{
+			Padding.Bottom = FMath::Min(GetKeyboardHeight(), DeviceH * 0.6f);
+		}
+		return Padding;
+	}
 	if (Layout.VAlign == VAlign_Bottom)
 	{
 		Padding.Top = FMath::Max(0.f, DeviceH - Layout.Height);
 	}
 	else if (Layout.VAlign == VAlign_Center)
 	{
-		const float VerticalInset = FMath::Max(0.f, (DeviceH - Layout.Height) * 0.5f);
-		Padding.Top = VerticalInset;
-		Padding.Bottom = VerticalInset;
+		const float SafeH = FMath::Max(0.f, DeviceH - Insets.Top - Insets.Bottom);
+		float Top = Insets.Top + FMath::Max(0.f, (SafeH - Layout.Height) * 0.5f);
+		float Bottom = FMath::Max(0.f, DeviceH - Top - Layout.Height);
+		if (Session.bKeyboardVisible)
+		{
+			// Centered sheets (modal / tablet card) shift up so the keyboard doesn't cover them.
+			const float KeyboardTop = DeviceH - GetKeyboardHeight();
+			const float Overlap = (Top + Layout.Height) - (KeyboardTop - 8.f);
+			if (Overlap > 0.f)
+			{
+				const float MinTop = Insets.Top + 4.f;
+				const float Shift = FMath::Min(Overlap, FMath::Max(0.f, Top - MinTop));
+				Top -= Shift;
+				Bottom += Shift;
+			}
+		}
+		Padding.Top = Top;
+		Padding.Bottom = Bottom;
 	}
 	if (Layout.HAlign == HAlign_Center)
 	{
-		const float HorizontalInset = FMath::Max(0.f, (DeviceW - Layout.Width) * 0.5f);
-		Padding.Left = HorizontalInset;
-		Padding.Right = HorizontalInset;
+		const float SafeW = FMath::Max(0.f, DeviceW - Insets.Left - Insets.Right);
+		if (Layout.Width <= SafeW)
+		{
+			Padding.Left = Insets.Left + FMath::Max(0.f, (SafeW - Layout.Width) * 0.5f);
+			Padding.Right = FMath::Max(0.f, DeviceW - Padding.Left - Layout.Width);
+		}
+		else
+		{
+			// Sheet wider than the safe area (e.g. full-width drawer): center on the full screen.
+			const float HorizontalInset = FMath::Max(0.f, (DeviceW - Layout.Width) * 0.5f);
+			Padding.Left = HorizontalInset;
+			Padding.Right = HorizontalInset;
+		}
 	}
 	return Padding;
+}
+
+float SStashPreviewPanel::GetWebContentBottomInset() const
+{
+	if (!IsCardPresentation())
+	{
+		return 0.f;
+	}
+	const FStashPreviewSheetLayout Layout = ComputeCurrentLayout();
+	if (!Layout.bCardBottomDrawer)
+	{
+		return 0.f;
+	}
+	const FStashPreviewSession& Session = FStashEditorPreviewService::Get()->GetSession();
+	// Sheet background extends into the home-indicator / gesture zone; web content stays above it.
+	float Inset = Layout.SafeArea.Bottom;
+	if (Session.bKeyboardVisible)
+	{
+		Inset = FMath::Max(Inset, GetKeyboardHeight());
+	}
+	const float MaxInset = FMath::Max(0.f, Layout.Height - DragHandleChromeHeight - 40.f);
+	return FMath::Min(Inset, MaxInset);
 }
 
 FVector2D SStashPreviewPanel::GetWebViewportSize() const
@@ -294,21 +536,36 @@ FVector2D SStashPreviewPanel::GetWebViewportSize() const
 	}
 	if (Session.PresentationMode == EStashPreviewPresentationMode::Browser)
 	{
-		return GetSelectedDeviceSize();
+		FVector2D Size = GetSelectedDeviceSize();
+		if (Session.bKeyboardVisible)
+		{
+			Size.Y = FMath::Max(1.f, Size.Y - FMath::Min(GetKeyboardHeight(), Size.Y * 0.6f));
+		}
+		return Size;
 	}
 	const FStashPreviewSheetLayout Layout = ComputeCurrentLayout();
 	float WebW = Layout.Width;
 	float WebH = Layout.Height;
 	if (Layout.bShowDragHandle
-		&& FStashEditorPreviewService::Get()->GetSession().PresentationMode == EStashPreviewPresentationMode::Card)
+		&& Session.PresentationMode == EStashPreviewPresentationMode::Card)
 	{
 		WebH = FMath::Max(1.f, WebH - DragHandleChromeHeight);
+	}
+	if (Layout.bCardBottomDrawer)
+	{
+		WebH = FMath::Max(1.f, WebH - GetWebContentBottomInset());
 	}
 	return FVector2D(WebW, WebH);
 }
 FReply SStashPreviewPanel::OnDimOverlayClicked()
 {
 	const FStashPreviewSession& Session = FStashEditorPreviewService::Get()->GetSession();
+	if (Session.bKeyboardVisible)
+	{
+		// Tapping outside an input dismisses the keyboard first, like on device.
+		FStashEditorPreviewService::Get()->SetKeyboardVisible(false, FString());
+		return FReply::Handled();
+	}
 	if (Session.PresentationMode == EStashPreviewPresentationMode::Modal
 		&& Session.bAllowDismiss
 		&& !Session.bIsPurchaseProcessing)
@@ -387,6 +644,25 @@ void SStashPreviewPanel::HandleCardSheetDragEnded(float FinalHeight, bool bDismi
 void SStashPreviewPanel::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime)
 {
 	SCompoundWidget::Tick(AllottedGeometry, InCurrentTime, InDeltaTime);
+
+	// Resolve the device spec once per frame instead of in every attribute lambda (dozens of
+	// struct-with-FString constructions + catalog scans per layout/paint pass). Refreshing here keeps
+	// live Project Settings edits (Custom device dimensions) reflecting with at most one frame of latency.
+	RefreshCachedDeviceSpec();
+	if (CachedDeviceSpec.Platform != LastSyncedActivePlatform)
+	{
+		// Editing the Custom device platform must also update behavior that reads Session.ActivePlatform
+		// (CloseBrowser / backdrop / keep-alive), not just the live chrome. Guarded so it fires only on change.
+		LastSyncedActivePlatform = CachedDeviceSpec.Platform;
+		FStashEditorPreviewService::Get()->SetActivePlatform(CachedDeviceSpec.Platform);
+	}
+	if (CachedDeviceSpec.UserAgent != FStashEditorPreviewService::Get()->GetPreviewUserAgent())
+	{
+		// Live Project Settings edits (Custom platform / size crossing the tablet threshold) change the
+		// emulated user-agent; push it and reload so the page re-fetches with the new platform identity.
+		PushDeviceEmulation(true);
+	}
+
 	const FStashPreviewSession& Session = FStashEditorPreviewService::Get()->GetSession();
 	if (Session.bIsOpen && NetworkTimeoutRemaining >= 0.f)
 	{
@@ -395,6 +671,14 @@ void SStashPreviewPanel::Tick(const FGeometry& AllottedGeometry, const double In
 		{
 			NetworkTimeoutRemaining = -1.f;
 			FStashEditorPreviewService::Get()->NotifyLoadError();
+		}
+	}
+	if (BackdropFlashRemaining > 0.f)
+	{
+		BackdropFlashRemaining -= InDeltaTime;
+		if (PreviewOverlay.IsValid())
+		{
+			PreviewOverlay->Invalidate(EInvalidateWidget::LayoutAndVolatility);
 		}
 	}
 #if STASH_HAS_WEBBROWSER
@@ -413,17 +697,28 @@ void SStashPreviewPanel::Tick(const FGeometry& AllottedGeometry, const double In
 	}
 #endif
 }
+FReply SStashPreviewPanel::OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
+{
+	if (InKeyEvent.GetKey() == EKeys::Escape && IsAndroidPreset())
+	{
+		FStashEditorPreviewService::Get()->HandleAndroidBack();
+		return FReply::Handled();
+	}
+	return SCompoundWidget::OnKeyDown(MyGeometry, InKeyEvent);
+}
 FVector2D SStashPreviewPanel::GetSelectedDeviceSize() const
 {
-	const UStashEditorSettings* Settings = GetDefault<UStashEditorSettings>();
-	const float CustomW = Settings ? Settings->CustomDeviceWidth : 390.f;
-	const float CustomH = Settings ? Settings->CustomDeviceHeight : 844.f;
-	FStashPreviewDeviceSize Size = StashPreviewGetDeviceSize(DevicePreset, CustomW, CustomH);
-	if (GetEffectiveLandscape())
+	return GetSelectedDeviceSpec().GetSize(GetEffectiveLandscape());
+}
+FVector2D SStashPreviewPanel::GetDeviceFrameSize() const
+{
+	FVector2D Size = GetSelectedDeviceSize();
+	if (IsDeviceChromeEnabled())
 	{
-		Swap(Size.Width, Size.Height);
+		Size.X += 2.f * DeviceBezelThickness;
+		Size.Y += 2.f * DeviceBezelThickness;
 	}
-	return FVector2D(Size.Width, Size.Height);
+	return Size;
 }
 FReply SStashPreviewPanel::OnReloadClicked()
 {
@@ -441,6 +736,17 @@ FReply SStashPreviewPanel::OnReloadClicked()
 FReply SStashPreviewPanel::OnDismissClicked()
 {
 	FStashEditorPreviewService::Get()->SimulateDismiss();
+	return FReply::Handled();
+}
+FReply SStashPreviewPanel::OnAndroidBackClicked()
+{
+	FStashEditorPreviewService::Get()->HandleAndroidBack();
+	return FReply::Handled();
+}
+FReply SStashPreviewPanel::OnToggleKeyboardClicked()
+{
+	const FStashPreviewSession& Session = FStashEditorPreviewService::Get()->GetSession();
+	FStashEditorPreviewService::Get()->SetKeyboardVisible(!Session.bKeyboardVisible, TEXT("text"));
 	return FReply::Handled();
 }
 FReply SStashPreviewPanel::OnSimulateSuccessClicked()
@@ -475,19 +781,41 @@ FReply SStashPreviewPanel::OnSimulateOptInClicked()
 }
 void SStashPreviewPanel::OnDevicePresetChanged(TSharedPtr<FString> NewSelection, ESelectInfo::Type SelectInfo)
 {
-	if (NewSelection.IsValid())
+	if (!NewSelection.IsValid())
 	{
-		SelectedDevicePreset = NewSelection;
-		DevicePreset = PresetFromLabel(*NewSelection);
-		bCardExpandedToMax = false;
-		CardDragHeightOverride = 0.f;
-		RebuildPreviewChrome();
+		return;
 	}
+	const int32 Index = DevicePresetOptions.IndexOfByKey(NewSelection);
+	const TArray<EStashPreviewDevicePreset> PresetOrder = BuildPresetOrder();
+	if (!PresetOrder.IsValidIndex(Index))
+	{
+		return;
+	}
+	SelectedDevicePreset = NewSelection;
+	DevicePreset = PresetOrder[Index];
+	bCardExpandedToMax = false;
+	CardDragHeightOverride = 0.f;
+	RebuildDeviceChromeBrushes();
+	LastSyncedActivePlatform = GetSelectedDeviceSpec().Platform;
+	FStashEditorPreviewService::Get()->SetActivePlatform(LastSyncedActivePlatform);
+	// New device → new mobile user-agent; reload so the checkout re-fetches with the new platform identity.
+	PushDeviceEmulation(true);
+	RebuildPreviewChrome();
 }
 void SStashPreviewPanel::HandlePreviewSchemeNavigation(const FString& Url)
 {
 	if (!Url.StartsWith(StashPreviewJsBridge::SchemePrefix))
 	{
+		return;
+	}
+
+	FString Path;
+	FString Query;
+	if (StashPreviewCallbackUrl::ParsePreviewCallbackUrl(Url, Path, Query)
+		&& StashPreviewCallbackUrl::IsPassiveCallbackPath(Path))
+	{
+		// Console-only events (keyboard focus): dispatch without touching webview navigation.
+		FStashEditorPreviewService::Get()->DispatchPreviewCallbackUrl(Url);
 		return;
 	}
 
@@ -544,6 +872,10 @@ void SStashPreviewPanel::HandlePreviewConsoleMessage(
 	Payload.Split(TEXT("?"), &Path, &Query);
 	if (Path.IsEmpty())
 	{
+		Path = Payload;
+	}
+	if (Path.IsEmpty())
+	{
 		return;
 	}
 
@@ -576,7 +908,33 @@ void SStashPreviewPanel::InjectStashSdkScript()
 #if STASH_HAS_WEBBROWSER
 	if (WebBrowser.IsValid())
 	{
+		// navigator.* reflects CEF's (desktop) UA regardless of request headers, so also spoof it in JS
+		// for client-side platform checks. Runs post-load — a best-effort complement to the header UA.
+		const FStashPreviewDeviceSpec& Spec = GetSelectedDeviceSpec();
+		WebBrowser->ExecuteJavascript(StashPreviewJsBridge::GetNavigatorSpoofScript(
+			Spec.UserAgent,
+			!Spec.bTablet,
+			Spec.Platform == EStashPreviewPlatform::Android));
 		WebBrowser->ExecuteJavascript(StashPreviewJsBridge::GetInjectionScript());
+	}
+#endif
+}
+void SStashPreviewPanel::PushDeviceEmulation(bool bReload)
+{
+	const FStashPreviewDeviceSpec& Spec = GetSelectedDeviceSpec();
+	const FString PlatformHint = Spec.Platform == EStashPreviewPlatform::Android ? TEXT("Android") : TEXT("iOS");
+	FStashEditorPreviewService::Get()->SetPreviewDeviceEmulation(Spec.UserAgent, !Spec.bTablet, PlatformHint);
+#if STASH_HAS_WEBBROWSER
+	if (bReload && WebBrowser.IsValid())
+	{
+		const FStashPreviewSession& Session = FStashEditorPreviewService::Get()->GetSession();
+		if (Session.bIsOpen && !Session.CurrentUrl.IsEmpty())
+		{
+			FStashEditorPreviewService::Get()->GetMutableSession().LoadStartSeconds = FApp::GetCurrentTime();
+			FStashEditorPreviewService::Get()->GetMutableSession().bPageLoadedFired = false;
+			NetworkTimeoutRemaining = 5.f;
+			WebBrowser->LoadURL(Session.CurrentUrl);
+		}
 	}
 #endif
 }
@@ -592,7 +950,27 @@ void SStashPreviewPanel::EnsureBrowserForUrl(const FString& Url)
 	LastLoadedUrl = Url;
 	if (!WebBrowser.IsValid())
 	{
-		SAssignNew(WebBrowser, SWebBrowser)
+		// Make sure the emulated UA is live before the window's first request goes out.
+		PushDeviceEmulation(false);
+
+		// Build the window inside a request context whose resource-load hook injects the mobile
+		// user-agent, so the checkout page renders its true per-platform experience.
+		TSharedPtr<IWebBrowserWindow> BrowserWindow;
+		if (IWebBrowserSingleton* Singleton = IWebBrowserModule::Get().GetSingleton())
+		{
+			FCreateBrowserWindowSettings WindowSettings;
+			WindowSettings.InitialURL = Url;
+			WindowSettings.bUseTransparency = false;
+			WindowSettings.BackgroundColor = FColor(255, 255, 255, 255);
+			FBrowserContextSettings ContextSettings(TEXT("StashPreviewMobileEmu"));
+			ContextSettings.OnBeforeContextResourceLoad =
+				FOnBeforeContextResourceLoadDelegate::CreateStatic(&StashPreviewInjectMobileHeaders);
+			WindowSettings.Context = ContextSettings;
+			BrowserWindow = Singleton->CreateBrowserWindow(WindowSettings);
+		}
+
+		// If the window couldn't be created, SWebBrowser falls back to its own (global-context) window.
+		SAssignNew(WebBrowser, SWebBrowser, BrowserWindow)
 			.InitialURL(Url)
 			.ShowControls(false)
 			.ShowAddressBar(false)
@@ -653,7 +1031,8 @@ FLinearColor SStashPreviewPanel::ParseBackgroundColor(const FString& HtmlHex) co
 void SStashPreviewPanel::UpdateBackdropBrush(const FStashPreviewSession& Session)
 {
 	BackdropBrush.Reset();
-	if (Session.BackdropBytes.Num() > 0)
+	// The checkout backdrop is an Android-only mechanism (flash reduction during forced rotation).
+	if (Session.BackdropBytes.Num() > 0 && Session.ActivePlatform == EStashPreviewPlatform::Android)
 	{
 		IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(TEXT("ImageWrapper"));
 		const EImageFormat Format = ImageWrapperModule.DetectImageFormat(Session.BackdropBytes.GetData(), Session.BackdropBytes.Num());
@@ -691,6 +1070,44 @@ void SStashPreviewPanel::UpdateSheetBrushes()
 		ModalSheetBorder->SetBorderImage(SheetBrush.Get());
 		ModalSheetBorder->Invalidate(EInvalidateWidget::LayoutAndVolatility);
 	}
+}
+
+void SStashPreviewPanel::RebuildDeviceChromeBrushes()
+{
+	// Keep the cache current: this runs from Construct and on preset change, before the spec is read below.
+	RefreshCachedDeviceSpec();
+	const FStashPreviewDeviceSpec Spec = GetSelectedDeviceSpec();
+	const FLinearColor BezelColor(0.015f, 0.015f, 0.02f, 1.f);
+	const float BezelRadius = FMath::Max(Spec.DeviceCornerRadius, 6.f) + DeviceBezelThickness * 0.5f;
+	BezelBrush = MakeShared<FSlateRoundedBoxBrush>(BezelColor, BezelRadius);
+
+	const FLinearColor CutoutColor(0.f, 0.f, 0.f, 1.f);
+	switch (Spec.NotchType)
+	{
+	case EStashPreviewNotchType::Notch:
+		// Flush to the top bezel: square top corners, rounded bottom.
+		NotchBrush = MakeShared<FSlateRoundedBoxBrush>(CutoutColor, FVector4(0.f, 0.f, 14.f, 14.f));
+		// Landscape: notch moves to the leading (left) edge — square left, rounded right.
+		NotchBrushLandscape = MakeShared<FSlateRoundedBoxBrush>(CutoutColor, FVector4(0.f, 0.f, 14.f, 14.f));
+		break;
+	case EStashPreviewNotchType::DynamicIsland:
+		NotchBrush = MakeShared<FSlateRoundedBoxBrush>(CutoutColor, 18.f);
+		NotchBrushLandscape = MakeShared<FSlateRoundedBoxBrush>(CutoutColor, 18.f);
+		break;
+	case EStashPreviewNotchType::PunchHole:
+		NotchBrush = MakeShared<FSlateRoundedBoxBrush>(CutoutColor, 10.f);
+		NotchBrushLandscape = MakeShared<FSlateRoundedBoxBrush>(CutoutColor, 10.f);
+		break;
+	default:
+		NotchBrush.Reset();
+		NotchBrushLandscape.Reset();
+		break;
+	}
+
+	// White brush; the overlay tints it to contrast with the content beneath.
+	HomeIndicatorBrush = MakeShared<FSlateRoundedBoxBrush>(FLinearColor::White, 2.5f);
+	KeepAliveBrush = MakeShared<FSlateRoundedBoxBrush>(FLinearColor(0.09f, 0.09f, 0.11f, 0.97f), 10.f);
+	KeepAliveIconBrush = MakeShared<FSlateRoundedBoxBrush>(FLinearColor(0.95f, 0.35f, 0.25f, 1.f), 7.f);
 }
 
 TSharedRef<SWidget> SStashPreviewPanel::BuildSheetInnerChrome(
@@ -739,6 +1156,11 @@ TSharedRef<SWidget> SStashPreviewPanel::BuildSheetInnerChrome(
 			]
 			+ SVerticalBox::Slot()
 			.FillHeight(1.f)
+			.Padding(TAttribute<FMargin>::CreateLambda([this]()
+			{
+				// Home-indicator / gesture / keyboard zone: shell color shows through beneath the web content.
+				return FMargin(0.f, 0.f, 0.f, GetWebContentBottomInset());
+			}))
 			[
 				SAssignNew(OutWebBox, SBox)
 				.Clipping(EWidgetClipping::ClipToBounds)
@@ -799,6 +1221,520 @@ void SStashPreviewPanel::RebuildPreviewChrome()
 	LastPresentationMode = Session.PresentationMode;
 	LastSyncedViewportSize = FVector2D::ZeroVector;
 	PreviewOverlay->Invalidate(EInvalidateWidget::LayoutAndVolatility);
+}
+TSharedRef<SWidget> SStashPreviewPanel::BuildDeviceChromeOverlays()
+{
+	const FSlateFontInfo StatusFont = FCoreStyle::GetDefaultFontStyle("Bold", 9);
+	const FSlateFontInfo KeepAliveTitleFont = FCoreStyle::GetDefaultFontStyle("Bold", 9);
+	const FSlateFontInfo KeepAliveTextFont = FCoreStyle::GetDefaultFontStyle("Regular", 8);
+
+	const auto ChromeVisible = [this]() -> EVisibility
+	{
+		return IsDeviceChromeEnabled() ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+	};
+
+	return SNew(SOverlay)
+		.Visibility(EVisibility::SelfHitTestInvisible)
+
+		// Simulated soft keyboard (behavior aid — shown regardless of the chrome toggle).
+		+ SOverlay::Slot()
+		.HAlign(HAlign_Fill)
+		.VAlign(VAlign_Bottom)
+		[
+			SNew(SBox)
+			.HeightOverride_Lambda([this]() { return GetKeyboardHeight(); })
+			.Visibility_Lambda([this]()
+			{
+				const FStashPreviewSession& S = FStashEditorPreviewService::Get()->GetSession();
+				return S.bIsOpen && S.bKeyboardVisible ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+			})
+			[
+				SNew(SStashPreviewKeyboard)
+				.Platform_Lambda([this]() { return GetSelectedDeviceSpec().Platform; })
+				.InputType_Lambda([this]()
+				{
+					return FStashEditorPreviewService::Get()->GetSession().KeyboardInputType;
+				})
+			]
+		]
+
+		// Status bar (transparent — content shows through; glyphs adapt to luminance beneath).
+		// Split into left ear (clock) / center cutout gap / right ear (indicators), like iOS.
+		+ SOverlay::Slot()
+		.HAlign(HAlign_Fill)
+		.VAlign(VAlign_Top)
+		[
+			SNew(SBox)
+			.HeightOverride_Lambda([this]() { return FMath::Max(GetEffectiveInsets().Top, 0.f); })
+			.Padding(FMargin(18.f, 0.f))
+			.Visibility_Lambda([this, ChromeVisible]()
+			{
+				return GetEffectiveInsets().Top >= 16.f ? ChromeVisible() : EVisibility::Collapsed;
+			})
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.FillWidth(1.f)
+				.VAlign(VAlign_Center)
+				.HAlign(HAlign_Left)
+				[
+					SNew(STextBlock)
+					.Text(NSLOCTEXT("StashEditor", "StatusBarTime", "9:41"))
+					.Font(StatusFont)
+					.ColorAndOpacity_Lambda([this]() { return FSlateColor(GetStatusGlyphColor()); })
+				]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				[
+					SNew(SBox)
+					.WidthOverride_Lambda([this]() { return GetStatusCutoutWidth(); })
+				]
+				+ SHorizontalBox::Slot()
+				.FillWidth(1.f)
+				.VAlign(VAlign_Center)
+				.HAlign(HAlign_Right)
+				[
+					SNew(SStashPreviewStatusIcons)
+					.GlyphColor_Lambda([this]() { return GetStatusGlyphColor(); })
+					.bShowCellular_Lambda([this]() { return ShouldShowCellular(); })
+				]
+			]
+		]
+
+		// Portrait cutout: notch flush to the top bezel; island/punch-hole inset slightly.
+		+ SOverlay::Slot()
+		.HAlign(HAlign_Center)
+		.VAlign(VAlign_Top)
+		[
+			SNew(SBox)
+			.WidthOverride_Lambda([this]() -> FOptionalSize
+			{
+				switch (GetSelectedDeviceSpec().NotchType)
+				{
+				case EStashPreviewNotchType::Notch:         return GetStatusCutoutWidth();
+				case EStashPreviewNotchType::DynamicIsland: return 125.f;
+				case EStashPreviewNotchType::PunchHole:     return 20.f;
+				default:                                    return 0.f;
+				}
+			})
+			.HeightOverride_Lambda([this]() -> FOptionalSize
+			{
+				switch (GetSelectedDeviceSpec().NotchType)
+				{
+				case EStashPreviewNotchType::Notch:         return 32.f;
+				case EStashPreviewNotchType::DynamicIsland: return 36.f;
+				case EStashPreviewNotchType::PunchHole:     return 20.f;
+				default:                                    return 0.f;
+				}
+			})
+			.Padding(0.f)
+			.Visibility_Lambda([this, ChromeVisible]()
+			{
+				if (GetEffectiveLandscape() || GetSelectedDeviceSpec().NotchType == EStashPreviewNotchType::None)
+				{
+					return EVisibility::Collapsed;
+				}
+				return ChromeVisible();
+			})
+			[
+				SNew(SBox)
+				.Padding_Lambda([this]()
+				{
+					switch (GetSelectedDeviceSpec().NotchType)
+					{
+					case EStashPreviewNotchType::DynamicIsland: return FMargin(0.f, 11.f, 0.f, 0.f);
+					case EStashPreviewNotchType::PunchHole:     return FMargin(0.f, 8.f, 0.f, 0.f);
+					default:                                    return FMargin(0.f);
+					}
+				})
+				[
+					SNew(SImage)
+					.Image_Lambda([this]() { return NotchBrush.Get(); })
+				]
+			]
+		]
+
+		// Landscape cutout: camera moves to the leading (left) edge when rotated.
+		+ SOverlay::Slot()
+		.HAlign(HAlign_Left)
+		.VAlign(VAlign_Center)
+		[
+			SNew(SBox)
+			.WidthOverride_Lambda([this]() -> FOptionalSize
+			{
+				switch (GetSelectedDeviceSpec().NotchType)
+				{
+				case EStashPreviewNotchType::Notch:         return 32.f;
+				case EStashPreviewNotchType::DynamicIsland: return 36.f;
+				case EStashPreviewNotchType::PunchHole:     return 20.f;
+				default:                                    return 0.f;
+				}
+			})
+			.HeightOverride_Lambda([this]() -> FOptionalSize
+			{
+				switch (GetSelectedDeviceSpec().NotchType)
+				{
+				case EStashPreviewNotchType::Notch:         return FMath::Clamp(GetSelectedDeviceSize().Y * 0.42f, 110.f, 175.f);
+				case EStashPreviewNotchType::DynamicIsland: return 125.f;
+				case EStashPreviewNotchType::PunchHole:     return 20.f;
+				default:                                    return 0.f;
+				}
+			})
+			.Padding_Lambda([this]()
+			{
+				switch (GetSelectedDeviceSpec().NotchType)
+				{
+				case EStashPreviewNotchType::DynamicIsland: return FMargin(11.f, 0.f, 0.f, 0.f);
+				case EStashPreviewNotchType::PunchHole:     return FMargin(8.f, 0.f, 0.f, 0.f);
+				default:                                    return FMargin(0.f);
+				}
+			})
+			.Visibility_Lambda([this, ChromeVisible]()
+			{
+				if (!GetEffectiveLandscape() || GetSelectedDeviceSpec().NotchType == EStashPreviewNotchType::None)
+				{
+					return EVisibility::Collapsed;
+				}
+				return ChromeVisible();
+			})
+			[
+				SNew(SImage)
+				.Image_Lambda([this]() { return NotchBrushLandscape.Get(); })
+			]
+		]
+
+		// Home indicator (iOS) / gesture bar pill (Android) — tinted to contrast with content.
+		+ SOverlay::Slot()
+		.HAlign(HAlign_Center)
+		.VAlign(VAlign_Bottom)
+		.Padding(FMargin(0.f, 0.f, 0.f, 8.f))
+		[
+			SNew(SBox)
+			.WidthOverride_Lambda([this]() { return IsAndroidPreset() ? 108.f : 134.f; })
+			.HeightOverride_Lambda([this]() { return IsAndroidPreset() ? 4.f : 5.f; })
+			.Padding(0.f)
+			.Visibility_Lambda([this, ChromeVisible]()
+			{
+				return GetEffectiveInsets().Bottom > 0.f ? ChromeVisible() : EVisibility::Collapsed;
+			})
+			[
+				SNew(SImage)
+				.Image_Lambda([this]() { return HomeIndicatorBrush.Get(); })
+				.ColorAndOpacity_Lambda([this]() -> FSlateColor
+				{
+					const FStashPreviewSession& S = FStashEditorPreviewService::Get()->GetSession();
+					const float BgLum = S.PresentationMode == EStashPreviewPresentationMode::Browser
+						? 0.9f
+						: 0.2126f * ActiveShellColor.R + 0.7152f * ActiveShellColor.G + 0.0722f * ActiveShellColor.B;
+					return BgLum > 0.5f
+						? FSlateColor(FLinearColor(0.f, 0.f, 0.f, 0.55f))
+						: FSlateColor(FLinearColor(1.f, 1.f, 1.f, 0.85f));
+				})
+			]
+		]
+
+		// Safe-area guides (debug toggle): thin lines at the inset boundaries.
+		+ SOverlay::Slot()
+		.HAlign(HAlign_Fill)
+		.VAlign(VAlign_Top)
+		.Padding(TAttribute<FMargin>::CreateLambda([this]() { return FMargin(0.f, GetEffectiveInsets().Top, 0.f, 0.f); }))
+		[
+			SNew(SBox).HeightOverride(1.f)
+			.Visibility_Lambda([this]()
+			{
+				const UStashEditorSettings* Settings = GetDefault<UStashEditorSettings>();
+				return Settings && Settings->bShowSafeAreaGuides && GetEffectiveInsets().Top > 0.f
+					? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+			})
+			[
+				SNew(SImage).Image(FAppStyle::GetBrush("WhiteBrush")).ColorAndOpacity(FLinearColor(0.2f, 0.8f, 1.f, 0.5f))
+			]
+		]
+		+ SOverlay::Slot()
+		.HAlign(HAlign_Fill)
+		.VAlign(VAlign_Bottom)
+		.Padding(TAttribute<FMargin>::CreateLambda([this]() { return FMargin(0.f, 0.f, 0.f, GetEffectiveInsets().Bottom); }))
+		[
+			SNew(SBox).HeightOverride(1.f)
+			.Visibility_Lambda([this]()
+			{
+				const UStashEditorSettings* Settings = GetDefault<UStashEditorSettings>();
+				return Settings && Settings->bShowSafeAreaGuides && GetEffectiveInsets().Bottom > 0.f
+					? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+			})
+			[
+				SNew(SImage).Image(FAppStyle::GetBrush("WhiteBrush")).ColorAndOpacity(FLinearColor(0.2f, 0.8f, 1.f, 0.5f))
+			]
+		]
+
+		// Keep-alive foreground-service notification mock (Android, Browser mode).
+		+ SOverlay::Slot()
+		.HAlign(HAlign_Fill)
+		.VAlign(VAlign_Top)
+		.Padding(TAttribute<FMargin>::CreateLambda([this]()
+		{
+			return FMargin(10.f, GetEffectiveInsets().Top + 8.f, 10.f, 0.f);
+		}))
+		[
+			SNew(SBorder)
+			.BorderImage_Lambda([this]() { return KeepAliveBrush.Get(); })
+			.Padding(FMargin(10.f, 8.f))
+			.Visibility_Lambda([this]()
+			{
+				const FStashPreviewSession& S = FStashEditorPreviewService::Get()->GetSession();
+				const bool bShow = S.bIsOpen
+					&& S.ActivePlatform == EStashPreviewPlatform::Android
+					&& S.bKeepAliveEnabled
+					&& S.PresentationMode == EStashPreviewPresentationMode::Browser;
+				return bShow ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+			})
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.VAlign(VAlign_Center)
+				.Padding(0.f, 0.f, 8.f, 0.f)
+				[
+					SNew(SBox)
+					.WidthOverride(14.f)
+					.HeightOverride(14.f)
+					[
+						SNew(SImage)
+						.Image_Lambda([this]() { return KeepAliveIconBrush.Get(); })
+					]
+				]
+				+ SHorizontalBox::Slot()
+				.FillWidth(1.f)
+				[
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot()
+					.AutoHeight()
+					[
+						SNew(STextBlock)
+						.Font(KeepAliveTitleFont)
+						.ColorAndOpacity(FLinearColor::White)
+						.Text_Lambda([]()
+						{
+							const FStashPreviewSession& S = FStashEditorPreviewService::Get()->GetSession();
+							return FText::FromString(S.KeepAliveConfig.NotificationTitle.IsEmpty()
+								? TEXT("Stash Pay") : *S.KeepAliveConfig.NotificationTitle);
+						})
+					]
+					+ SVerticalBox::Slot()
+					.AutoHeight()
+					[
+						SNew(STextBlock)
+						.Font(KeepAliveTextFont)
+						.ColorAndOpacity(FLinearColor(0.75f, 0.75f, 0.78f, 1.f))
+						.Text_Lambda([]()
+						{
+							const FStashPreviewSession& S = FStashEditorPreviewService::Get()->GetSession();
+							return FText::FromString(S.KeepAliveConfig.NotificationText.IsEmpty()
+								? TEXT("Completing your purchase…") : *S.KeepAliveConfig.NotificationText);
+						})
+					]
+				]
+			]
+		]
+
+		// White rotation flash (Android force-portrait without a backdrop).
+		+ SOverlay::Slot()
+		[
+			SNew(SBorder)
+			.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
+			.BorderBackgroundColor(FLinearColor::White)
+			.Visibility_Lambda([this]()
+			{
+				return BackdropFlashRemaining > 0.f ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+			})
+		]
+
+		// Topmost: round the device screen corners over the (rectangular) webview and keyboard.
+		+ SOverlay::Slot()
+		.HAlign(HAlign_Fill)
+		.VAlign(VAlign_Fill)
+		[
+			SNew(SStashPreviewCornerMask)
+			.Radius_Lambda([this]() { return IsDeviceChromeEnabled() ? GetSelectedDeviceSpec().DeviceCornerRadius : 0.f; })
+			.MaskColor(FLinearColor(0.015f, 0.015f, 0.02f, 1.f))
+		];
+}
+TSharedRef<SWidget> SStashPreviewPanel::BuildDevicePreviewArea()
+{
+	return SNew(SBorder)
+		.BorderImage(FAppStyle::GetBrush("ToolPanel.DarkGroupBorder"))
+		.Padding(12.f)
+		[
+			SAssignNew(PreviewHost, SBox)
+			.HAlign(HAlign_Center)
+			.VAlign(VAlign_Center)
+			[
+				SNew(SOverlay)
+				+ SOverlay::Slot()
+				.HAlign(HAlign_Center)
+				.VAlign(VAlign_Center)
+				[
+					SNew(STextBlock)
+					.Text(NSLOCTEXT("StashEditor", "PreviewIdle", "Call Open Card, Open Modal, or Open Browser during PIE to preview checkout here."))
+					.AutoWrapText(true)
+					.Visibility_Lambda([]()
+					{
+						return FStashEditorPreviewService::Get()->GetSession().bIsOpen
+							? EVisibility::Collapsed : EVisibility::Visible;
+					})
+				]
+				+ SOverlay::Slot()
+				.HAlign(HAlign_Center)
+				.VAlign(VAlign_Center)
+				[
+					SAssignNew(DeviceFrameBox, SBox)
+					.WidthOverride_Lambda([this]() { return GetDeviceFrameSize().X; })
+					.HeightOverride_Lambda([this]() { return GetDeviceFrameSize().Y; })
+					.Visibility_Lambda([]()
+					{
+						return FStashEditorPreviewService::Get()->GetSession().bIsOpen
+							? EVisibility::Visible : EVisibility::Collapsed;
+					})
+					[
+						SNew(SBorder)
+						.BorderImage_Lambda([this]() -> const FSlateBrush*
+						{
+							return IsDeviceChromeEnabled() && BezelBrush.IsValid()
+								? BezelBrush.Get()
+								: FAppStyle::GetBrush("ToolPanel.GroupBorder");
+						})
+						.Padding_Lambda([this]()
+						{
+							return FMargin(IsDeviceChromeEnabled() ? DeviceBezelThickness : 0.f);
+						})
+						[
+							SNew(SBorder)
+							.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+							.Padding(0.f)
+							.Clipping(EWidgetClipping::ClipToBounds)
+							[
+								SAssignNew(PreviewOverlay, SOverlay)
+								+ SOverlay::Slot()
+								[
+									SAssignNew(BackdropImage, SImage)
+									.Visibility_Lambda([this]()
+									{
+										return BackdropBrush.IsValid() ? EVisibility::Visible : EVisibility::Collapsed;
+									})
+								]
+								+ SOverlay::Slot()
+								[
+									SNew(SBorder)
+									.BorderBackgroundColor(FLinearColor(0.05f, 0.05f, 0.06f, 1.f))
+									.Visibility_Lambda([this]()
+									{
+										return BackdropBrush.IsValid() ? EVisibility::Collapsed : EVisibility::Visible;
+									})
+								]
+								+ SOverlay::Slot()
+								[
+									SNew(SBorder)
+									.BorderBackgroundColor(FLinearColor(0.f, 0.f, 0.f, 0.45f))
+									.Visibility_Lambda([this]()
+									{
+										return bShowDimOverlay && !bDimDismissible ? EVisibility::Visible : EVisibility::Collapsed;
+									})
+								]
+								+ SOverlay::Slot()
+								[
+									SNew(SButton)
+									.ButtonStyle(FAppStyle::Get(), "NoBorder")
+									.ContentPadding(FMargin(0.f))
+									.Visibility_Lambda([this]()
+									{
+										return bShowDimOverlay && bDimDismissible ? EVisibility::Visible : EVisibility::Collapsed;
+									})
+									.OnClicked(this, &SStashPreviewPanel::OnDimOverlayClicked)
+									[
+										SNew(SBorder)
+										.BorderBackgroundColor(FLinearColor(0.f, 0.f, 0.f, 0.45f))
+									]
+								]
+								+ SOverlay::Slot()
+								.HAlign(HAlign_Fill)
+								.VAlign(VAlign_Fill)
+								[
+									SNew(SBox)
+									.Padding_Lambda([this]()
+									{
+										return ComputeSheetPadding(ComputeCurrentLayout());
+									})
+									[
+										SAssignNew(SheetAlignBox, SBox)
+										.WidthOverride_Lambda([this]() -> FOptionalSize
+										{
+											const FStashPreviewSheetLayout Layout = ComputeCurrentLayout();
+											return Layout.HAlign == HAlign_Fill
+												? FOptionalSize()
+												: FOptionalSize(Layout.Width);
+										})
+										.HeightOverride_Lambda([this]() -> FOptionalSize
+										{
+											const FStashPreviewSheetLayout Layout = ComputeCurrentLayout();
+											return Layout.VAlign == VAlign_Fill
+												? FOptionalSize()
+												: FOptionalSize(Layout.Height);
+										})
+										.Clipping(EWidgetClipping::ClipToBounds)
+										[
+											SNew(SOverlay)
+											+ SOverlay::Slot()
+											[
+												SAssignNew(CardSheetHost, SBox)
+												.Visibility_Lambda([this]()
+												{
+													return IsCardPresentation()
+														? EVisibility::Visible : EVisibility::Collapsed;
+												})
+												[
+													SAssignNew(DraggableSheet, SStashPreviewDraggableSheet)
+													.SheetHeight_Lambda([this]() { return ComputeCurrentLayout().Height; })
+													.BaseSheetHeight_Lambda([this]() { return ComputeCardBaseLayout().Height; })
+													.MaxExpandHeight_Lambda([this]() { return GetCardMaxExpandedHeight(); })
+													.bEnableDragDismiss_Lambda([this]() { return IsCardDragDismissEnabled(); })
+													.bEnableExpandDrag_Lambda([this]() { return IsCardExpandDragEnabled(); })
+													.OnDismissRequested(FSimpleDelegate::CreateSP(this, &SStashPreviewPanel::HandleDragDismiss))
+													.OnSheetHeightDragChanged(FOnStashPreviewCardSheetHeightDrag::CreateSP(
+														this, &SStashPreviewPanel::HandleCardSheetHeightDrag))
+													.OnSheetDragEnded(FOnStashPreviewCardSheetDragEnded::CreateSP(
+														this, &SStashPreviewPanel::HandleCardSheetDragEnded))
+													[
+														BuildSheetInnerChrome(CardSheetBorder, CardWebContentBox, true)
+													]
+												]
+											]
+											+ SOverlay::Slot()
+											[
+												SAssignNew(ModalSheetHost, SBox)
+												.Visibility_Lambda([this]()
+												{
+													const FStashPreviewSession& S = FStashEditorPreviewService::Get()->GetSession();
+													return S.bIsOpen
+														&& S.PresentationMode != EStashPreviewPresentationMode::Card
+														? EVisibility::Visible : EVisibility::Collapsed;
+												})
+												[
+													BuildSheetInnerChrome(ModalSheetBorder, ModalWebContentBox, false)
+												]
+											]
+										]
+									]
+								]
+								+ SOverlay::Slot()
+								[
+									BuildDeviceChromeOverlays()
+								]
+							]
+						]
+					]
+				]
+			]
+		];
 }
 TSharedRef<SWidget> SStashPreviewPanel::BuildControlsPanel()
 {
@@ -865,6 +1801,47 @@ TSharedRef<SWidget> SStashPreviewPanel::BuildControlsPanel()
 			]
 			+ SVerticalBox::Slot()
 			.AutoHeight()
+			.Padding(0.f, 4.f, 0.f, 0.f)
+			[
+				SNew(STextBlock)
+				.Text_Lambda([this]()
+				{
+					const FStashPreviewDeviceSpec Spec = GetSelectedDeviceSpec();
+					const FVector2D Physical = Spec.LogicalSize * Spec.ScaleFactor;
+					return FText::FromString(FString::Printf(
+						TEXT("%s %s · @%.3gx → %.0f x %.0f px"),
+						*PlatformLabel(Spec.Platform),
+						Spec.bTablet ? TEXT("tablet") : TEXT("phone"),
+						Spec.ScaleFactor,
+						Physical.X, Physical.Y));
+				})
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 6.f, 0.f, 0.f)
+			[
+				SNew(SCheckBox)
+				.IsChecked_Lambda([]()
+				{
+					const UStashEditorSettings* Settings = GetDefault<UStashEditorSettings>();
+					return Settings && Settings->bShowDeviceChrome ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+				})
+				.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+				{
+					if (UStashEditorSettings* Settings = GetMutableDefault<UStashEditorSettings>())
+					{
+						Settings->bShowDeviceChrome = NewState == ECheckBoxState::Checked;
+						Settings->SaveConfig();
+					}
+					RebuildPreviewChrome();
+				})
+				[
+					SNew(STextBlock)
+					.Text(NSLOCTEXT("StashEditor", "ShowDeviceChrome", "Show device chrome"))
+				]
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
 			.Padding(0.f, 8.f, 0.f, 4.f)
 			[
 				SNew(STextBlock)
@@ -888,6 +1865,7 @@ TSharedRef<SWidget> SStashPreviewPanel::BuildControlsPanel()
 						ActiveLayout,
 						S.CardConfig,
 						S.ModalConfig,
+						GetSelectedDeviceSpec(),
 						GetEffectiveLandscape(),
 						S.bForcePortraitLayout));
 				})
@@ -896,6 +1874,19 @@ TSharedRef<SWidget> SStashPreviewPanel::BuildControlsPanel()
 				{
 					return FStashEditorPreviewService::Get()->GetSession().bIsOpen
 						? EVisibility::Visible : EVisibility::Collapsed;
+				})
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 0.f, 0.f, 4.f)
+			[
+				SNew(STextBlock)
+				.Text(NSLOCTEXT("StashEditor", "BackdropFlashHint", "Tip: the white flash on forced rotation happens on real Android devices too — set a backdrop via Capture Viewport For Android Checkout Backdrop to avoid it."))
+				.AutoWrapText(true)
+				.ColorAndOpacity(FLinearColor(1.f, 0.7f, 0.3f, 1.f))
+				.Visibility_Lambda([this]()
+				{
+					return bShowBackdropFlashHint ? EVisibility::Visible : EVisibility::Collapsed;
 				})
 			]
 			+ SVerticalBox::Slot()
@@ -910,17 +1901,25 @@ TSharedRef<SWidget> SStashPreviewPanel::BuildControlsPanel()
 					{
 						return NSLOCTEXT("StashEditor", "ToggleLandscapeForced", "Landscape (forced portrait by card config)");
 					}
+					if (S.bLandscapeLockWhenCardClosed)
+					{
+						return NSLOCTEXT("StashEditor", "ToggleLandscapeLocked", "Landscape (locked by Set Landscape Lock)");
+					}
 					return NSLOCTEXT("StashEditor", "ToggleLandscape", "Toggle landscape");
 				})
 				.IsEnabled_Lambda([]()
 				{
 					const FStashPreviewSession& S = FStashEditorPreviewService::Get()->GetSession();
+					if (S.bLandscapeLockWhenCardClosed)
+					{
+						return false;
+					}
 					return !(S.bIsOpen && S.bForcePortraitLayout);
 				})
 				.OnClicked_Lambda([this]()
 				{
 					const FStashPreviewSession& S = FStashEditorPreviewService::Get()->GetSession();
-					if (S.bIsOpen && S.bForcePortraitLayout)
+					if (S.bLandscapeLockWhenCardClosed || (S.bIsOpen && S.bForcePortraitLayout))
 					{
 						return FReply::Handled();
 					}
@@ -943,6 +1942,36 @@ TSharedRef<SWidget> SStashPreviewPanel::BuildControlsPanel()
 				SNew(SButton)
 				.Text(NSLOCTEXT("StashEditor", "DismissPreview", "Dismiss"))
 				.OnClicked(this, &SStashPreviewPanel::OnDismissClicked)
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				SNew(SButton)
+				.Text(NSLOCTEXT("StashEditor", "AndroidBack", "Back (Android)"))
+				.ToolTipText(NSLOCTEXT("StashEditor", "AndroidBackTip", "Simulates the Android back gesture: hides the keyboard first, then dismisses the Stash UI (blocked while processing or when allowDismiss is off). Esc key does the same while the panel is focused."))
+				.OnClicked(this, &SStashPreviewPanel::OnAndroidBackClicked)
+				.Visibility_Lambda([this]()
+				{
+					return IsAndroidPreset() ? EVisibility::Visible : EVisibility::Collapsed;
+				})
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				SNew(SButton)
+				.Text_Lambda([]()
+				{
+					const FStashPreviewSession& S = FStashEditorPreviewService::Get()->GetSession();
+					return S.bKeyboardVisible
+						? NSLOCTEXT("StashEditor", "HideKeyboard", "Hide keyboard")
+						: NSLOCTEXT("StashEditor", "ShowKeyboard", "Show keyboard");
+				})
+				.ToolTipText(NSLOCTEXT("StashEditor", "ToggleKeyboardTip", "Simulates the soft keyboard. It also appears automatically when a checkout input field is focused."))
+				.OnClicked(this, &SStashPreviewPanel::OnToggleKeyboardClicked)
+				.IsEnabled_Lambda([]()
+				{
+					return FStashEditorPreviewService::Get()->GetSession().bIsOpen;
+				})
 			]
 			+ SVerticalBox::Slot()
 			.AutoHeight()
@@ -1002,173 +2031,14 @@ TSharedRef<SWidget> SStashPreviewPanel::BuildControlsPanel()
 				{
 					const FStashPreviewSession& S = FStashEditorPreviewService::Get()->GetSession();
 					return FText::Format(
-						NSLOCTEXT("StashEditor", "PreviewDebugFmt", "Open: {0}  Processing: {1}\nLandscape lock: {2}  Keep-alive: {3}"),
+						NSLOCTEXT("StashEditor", "PreviewDebugFmt", "Open: {0}  Processing: {1}  Keyboard: {2}\nLandscape lock: {3}  Keep-alive: {4}"),
 						S.bIsOpen ? FText::FromString(TEXT("yes")) : FText::FromString(TEXT("no")),
 						S.bIsPurchaseProcessing ? FText::FromString(TEXT("yes")) : FText::FromString(TEXT("no")),
+						S.bKeyboardVisible ? FText::FromString(TEXT("yes")) : FText::FromString(TEXT("no")),
 						S.bLandscapeLockWhenCardClosed ? FText::FromString(TEXT("on")) : FText::FromString(TEXT("off")),
 						S.bKeepAliveEnabled ? FText::FromString(TEXT("on")) : FText::FromString(TEXT("off")));
 				})
 				.AutoWrapText(true)
-			]
-		];
-}
-TSharedRef<SWidget> SStashPreviewPanel::BuildDevicePreviewArea()
-{
-	return SNew(SBorder)
-		.BorderImage(FAppStyle::GetBrush("ToolPanel.DarkGroupBorder"))
-		.Padding(12.f)
-		[
-			SAssignNew(PreviewHost, SBox)
-			.HAlign(HAlign_Center)
-			.VAlign(VAlign_Center)
-			[
-				SAssignNew(PreviewOverlay, SOverlay)
-				+ SOverlay::Slot()
-				.HAlign(HAlign_Center)
-				.VAlign(VAlign_Center)
-				[
-					SNew(STextBlock)
-					.Text(NSLOCTEXT("StashEditor", "PreviewIdle", "Call Open Card, Open Modal, or Open Browser during PIE to preview checkout here."))
-					.AutoWrapText(true)
-					.Visibility_Lambda([]()
-					{
-						return FStashEditorPreviewService::Get()->GetSession().bIsOpen
-							? EVisibility::Collapsed : EVisibility::Visible;
-					})
-				]
-				+ SOverlay::Slot()
-				.HAlign(HAlign_Center)
-				.VAlign(VAlign_Center)
-				[
-					SAssignNew(DeviceFrameBox, SBox)
-					.WidthOverride_Lambda([this]() { return GetSelectedDeviceSize().X; })
-					.HeightOverride_Lambda([this]() { return GetSelectedDeviceSize().Y; })
-					.Visibility_Lambda([]()
-					{
-						return FStashEditorPreviewService::Get()->GetSession().bIsOpen
-							? EVisibility::Visible : EVisibility::Collapsed;
-					})
-					[
-						SNew(SBorder)
-						.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-						.Padding(0.f)
-						.Clipping(EWidgetClipping::ClipToBounds)
-						[
-							SNew(SOverlay)
-							+ SOverlay::Slot()
-							[
-								SAssignNew(BackdropImage, SImage)
-								.Visibility_Lambda([this]()
-								{
-									return BackdropBrush.IsValid() ? EVisibility::Visible : EVisibility::Collapsed;
-								})
-							]
-							+ SOverlay::Slot()
-							[
-								SNew(SBorder)
-								.BorderBackgroundColor(FLinearColor(0.05f, 0.05f, 0.06f, 1.f))
-								.Visibility_Lambda([this]()
-								{
-									return BackdropBrush.IsValid() ? EVisibility::Collapsed : EVisibility::Visible;
-								})
-							]
-							+ SOverlay::Slot()
-							[
-								SNew(SBorder)
-								.BorderBackgroundColor(FLinearColor(0.f, 0.f, 0.f, 0.45f))
-								.Visibility_Lambda([this]()
-								{
-									return bShowDimOverlay && !bDimDismissible ? EVisibility::Visible : EVisibility::Collapsed;
-								})
-							]
-							+ SOverlay::Slot()
-							[
-								SNew(SButton)
-								.ButtonStyle(FAppStyle::Get(), "NoBorder")
-								.ContentPadding(FMargin(0.f))
-								.Visibility_Lambda([this]()
-								{
-									return bShowDimOverlay && bDimDismissible ? EVisibility::Visible : EVisibility::Collapsed;
-								})
-								.OnClicked(this, &SStashPreviewPanel::OnDimOverlayClicked)
-								[
-									SNew(SBorder)
-									.BorderBackgroundColor(FLinearColor(0.f, 0.f, 0.f, 0.45f))
-								]
-							]
-							+ SOverlay::Slot()
-							.HAlign(HAlign_Fill)
-							.VAlign(VAlign_Fill)
-							[
-								SNew(SBox)
-								.Padding_Lambda([this]()
-								{
-									return ComputeSheetPadding(ComputeCurrentLayout());
-								})
-								[
-									SAssignNew(SheetAlignBox, SBox)
-									.WidthOverride_Lambda([this]() -> FOptionalSize
-									{
-										const FStashPreviewSheetLayout Layout = ComputeCurrentLayout();
-										return Layout.HAlign == HAlign_Fill
-											? FOptionalSize()
-											: FOptionalSize(Layout.Width);
-									})
-									.HeightOverride_Lambda([this]() -> FOptionalSize
-									{
-										const FStashPreviewSheetLayout Layout = ComputeCurrentLayout();
-										return Layout.VAlign == VAlign_Fill
-											? FOptionalSize()
-											: FOptionalSize(Layout.Height);
-									})
-									.Clipping(EWidgetClipping::ClipToBounds)
-									[
-										SNew(SOverlay)
-										+ SOverlay::Slot()
-										[
-											SAssignNew(CardSheetHost, SBox)
-											.Visibility_Lambda([this]()
-											{
-												return IsCardPresentation()
-													? EVisibility::Visible : EVisibility::Collapsed;
-											})
-											[
-												SAssignNew(DraggableSheet, SStashPreviewDraggableSheet)
-												.SheetHeight_Lambda([this]() { return ComputeCurrentLayout().Height; })
-												.BaseSheetHeight_Lambda([this]() { return ComputeCardBaseLayout().Height; })
-												.MaxExpandHeight_Lambda([this]() { return GetCardMaxExpandedHeight(); })
-												.bEnableDragDismiss_Lambda([this]() { return IsCardDragDismissEnabled(); })
-												.bEnableExpandDrag_Lambda([this]() { return IsCardExpandDragEnabled(); })
-												.OnDismissRequested(FSimpleDelegate::CreateSP(this, &SStashPreviewPanel::HandleDragDismiss))
-												.OnSheetHeightDragChanged(FOnStashPreviewCardSheetHeightDrag::CreateSP(
-													this, &SStashPreviewPanel::HandleCardSheetHeightDrag))
-												.OnSheetDragEnded(FOnStashPreviewCardSheetDragEnded::CreateSP(
-													this, &SStashPreviewPanel::HandleCardSheetDragEnded))
-												[
-													BuildSheetInnerChrome(CardSheetBorder, CardWebContentBox, true)
-												]
-											]
-										]
-										+ SOverlay::Slot()
-										[
-											SAssignNew(ModalSheetHost, SBox)
-											.Visibility_Lambda([this]()
-											{
-												const FStashPreviewSession& S = FStashEditorPreviewService::Get()->GetSession();
-												return S.bIsOpen
-													&& S.PresentationMode != EStashPreviewPresentationMode::Card
-													? EVisibility::Visible : EVisibility::Collapsed;
-											})
-											[
-												BuildSheetInnerChrome(ModalSheetBorder, ModalWebContentBox, false)
-											]
-										]
-									]
-								]
-							]
-						]
-					]
-				]
 			]
 		];
 }

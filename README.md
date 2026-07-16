@@ -38,7 +38,20 @@ The plugin includes an editor-only checkout preview (similar to [stash-unity’s
 1. Enable **Stash** under **Edit → Plugins**, then restart the editor.
 2. **Optional (preview webview):** If **Web Browser** appears in the plugin list, enable it, rebuild, and restart.
 3. Open **Window → Stash Preview** (dock tab on the right).
-4. Optional: **Edit → Project Settings → Plugins → Stash** — toggle **Enable Editor Preview**, browser mode, and default device preset.
+4. Optional: **Edit → Project Settings → Plugins → Stash** — toggle **Enable Editor Preview**, browser mode, default device preset, **Show Device Chrome**, and the Custom device platform/size.
+
+### Device presets & platform emulation
+
+The preview device dropdown covers **iOS and Android phones and tablets**: iPhone SE / 14 / 14 Pro / 14 Pro Max, iPad, iPad Pro, Pixel 8, Galaxy S24, Pixel Tablet, Galaxy Tab S9, plus Custom (platform and size from Project Settings). Each preset carries its **platform, safe-area insets, notch/punch-hole style, and keyboard heights**, and the panel shows the physical resolution (e.g. `@3x → 1179 x 2556 px`).
+
+Selecting a preset switches platform **behavior**, not just the frame:
+
+- **Android:** **Close Browser** becomes a no-op (Chrome Custom Tabs cannot be closed by the app — a warning is logged, matching device), the **Back (Android)** button (or **Esc** while the panel is focused) simulates the back gesture (hides the keyboard first, then dismisses — blocked while processing or when `bAllowDismiss` is off), and the keep-alive APIs render a **notification mock** over the browser preview.
+- **iOS:** Close Browser closes the session (Safari View Controller parity); there is no back gesture.
+
+**Safe areas & device chrome:** the frame renders a bezel, status bar, notch / Dynamic Island / punch-hole, and home indicator / gesture bar per preset (toggle with **Show device chrome**). Layout respects insets like the native SDK: the bottom-drawer card's web content sits above the home indicator / gesture bar (sheet background fills the inset zone), card expand stops below the status bar, and centered sheets center within the safe area.
+
+**Keyboard simulation:** focusing an input field in the checkout page shows a platform-styled soft-keyboard mock (numeric fields get the number pad). The webview viewport shrinks like `visualViewport` / `adjustResize`, the focused field scrolls into view, bottom-drawer cards get covered by the keyboard (as on device) while centered modals shift up. Use the **Show/Hide keyboard** button to test without focusing a field.
 
 ### Usage
 
@@ -67,12 +80,19 @@ The **Active config** block in the preview controls panel shows which ratio fiel
 | `OpenModal` / `OpenModalWithConfig` | Centered modal layout from config; dim tap dismiss when `bAllowDismiss` |
 | `IsCardOpen` / `IsPurchaseProcessing` / `DismissCard` | Session state |
 | `OpenBrowser` | In-panel browser (default) or OS browser (setting) |
-| `CloseBrowser` | Closes in-panel browser session |
-| `SetAndroidCheckoutBackdropBytes` / `Clear…` | Backdrop behind dim overlay |
-| `SetLandscapeLockWhenCardClosed` / keep-alive APIs | Stored for debug display (no native effect) |
+| `CloseBrowser` | Closes in-panel browser on iOS presets; **no-op on Android presets** (Custom Tabs parity) |
+| `SetAndroidCheckoutBackdropBytes` / `Clear…` | Backdrop behind dim overlay (Android presets; iOS ignores it like the device) |
+| `SetLandscapeLockWhenCardClosed` | Preview device locks to landscape while no Stash UI is open; a `bForcePortrait` card rotates to portrait and back on dismiss |
+| Keep-alive APIs | Notification mock over the browser preview on Android presets |
 | Callbacks | Fired via injected `window.stash_sdk` JS bridge or **Simulate callbacks** buttons |
 
-**Not simulated:** real payments, Chrome Custom Tabs / Safari chrome, Android keep-alive service, OS orientation lock. Device builds are unchanged (`StashEditor` is editor-only).
+**Force-portrait rotation (Android):** opening a `bForcePortrait` card while the preview device is landscape rotates the frame to portrait; without a backdrop set, a brief **white flash** is shown — the same flash real Android devices produce — with a tip pointing at **Capture Viewport For Android Checkout Backdrop**. The previous orientation is restored when the session ends.
+
+**Mobile rendering & user-agent:** the checkout webview is driven with a **per-device mobile user-agent** (iOS Safari for iPhone/iPad presets, Android Chrome for Pixel/Galaxy — tablets drop the `Mobile` token) plus `sec-ch-ua-mobile` / `sec-ch-ua-platform` client hints, injected via a CEF request context. `navigator.userAgent` / `platform` / `vendor` / `maxTouchPoints` are also spoofed in-page for client-side platform checks. Switching device presets reloads the page so it re-fetches with the new platform identity. Combined with the mobile viewport and device-width sizing, the checkout renders its true iOS/Android layout and platform branding without a connected device.
+
+**CEF ceiling (important):** the preview runs on Chromium (CEF), **not** the phone's own webview (WebKit on iOS, Android System WebView). Responsive layout, sizing, safe areas, and UA-based branding match a real phone, but engine-exclusive features cannot be reproduced in-editor — most notably the **Apple Pay sheet** (needs WebKit's `window.ApplePaySession`) and pixel-exact Safari text rasterization. Verify those on a device.
+
+**Not simulated:** real payments, native Apple Pay / Google Pay sheets, Chrome Custom Tabs / Safari toolbar chrome, presentation animations, typing on the keyboard mock (text entry still uses your physical keyboard). Safe-area and keyboard-height values come from public device specs. Device builds are unchanged (`StashEditor` is editor-only).
 
 ## Quick Start
 

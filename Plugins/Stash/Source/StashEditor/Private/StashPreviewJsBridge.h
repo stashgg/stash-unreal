@@ -9,8 +9,48 @@ namespace StashPreviewJsBridge
 {
 	inline constexpr TCHAR SchemePrefix[] = TEXT("stash-unreal-preview://");
 
+	/**
+	 * Spoofs navigator.* to match the emulated device for client-side platform checks.
+	 * The HTTP request UA is set via the CEF request context; this covers JS that reads navigator
+	 * (which otherwise reports CEF's desktop UA). Injected post-load, so it's best-effort for early sniffers.
+	 */
+	inline FString GetNavigatorSpoofScript(const FString& UserAgent, bool bMobile, bool bAndroid)
+	{
+		FString Escaped = UserAgent;
+		Escaped.ReplaceInline(TEXT("\\"), TEXT("\\\\"));
+		Escaped.ReplaceInline(TEXT("\""), TEXT("\\\""));
+		const TCHAR* Platform = bAndroid ? TEXT("Linux armv8l") : (bMobile ? TEXT("iPhone") : TEXT("iPad"));
+		const TCHAR* Vendor = bAndroid ? TEXT("Google Inc.") : TEXT("Apple Computer, Inc.");
+		return FString::Printf(TEXT(R"JS(
+(function() {
+  try {
+    var ua = "%s";
+    function def(obj, prop, val) {
+      try { Object.defineProperty(obj, prop, { get: function() { return val; }, configurable: true }); } catch (e) {}
+    }
+    def(navigator, 'userAgent', ua);
+    def(navigator, 'appVersion', ua.replace('Mozilla/', ''));
+    def(navigator, 'platform', '%s');
+    def(navigator, 'vendor', '%s');
+    def(navigator, 'maxTouchPoints', %d);
+    if (navigator.userAgentData) {
+      def(navigator, 'userAgentData', { mobile: %s, platform: '%s', brands: navigator.userAgentData.brands || [] });
+    }
+    if (!('ontouchstart' in window)) { window.ontouchstart = null; }
+  } catch (e) {}
+})();
+)JS"),
+			*Escaped,
+			Platform,
+			Vendor,
+			5,
+			bMobile ? TEXT("true") : TEXT("false"),
+			bAndroid ? TEXT("Android") : TEXT("iOS"));
+	}
+
 	inline FString GetInjectionScript()
 	{
+		// Split into adjacent literals: MSVC caps a single string literal at ~16 KB (C2026).
 		return TEXT(R"JS(
 (function() {
   function applyMobilePreviewStyles() {
@@ -137,8 +177,64 @@ namespace StashPreviewJsBridge
     document.addEventListener('dragstart', onDragStart, opts);
   }
 
+)JS")
+		TEXT(R"JS(
+  function applyKeyboardFocusTracking() {
+    if (window.__stashUnrealPreviewKeyboardTracking) { return; }
+    window.__stashUnrealPreviewKeyboardTracking = true;
+
+    // Keyboard events are "passive": console-only, never navigation, so the host
+    // never treats them like page-leaving callbacks.
+    function notifyPassive(path, query) {
+      try {
+        var q = query ? ('?' + query) : '';
+        console.log('__STASH_PREVIEW__:' + path + q);
+      } catch (e) {}
+    }
+
+    function isEditable(el) {
+      if (!el || !el.tagName) { return false; }
+      var tag = el.tagName.toUpperCase();
+      if (tag === 'TEXTAREA') { return true; }
+      if (tag === 'INPUT') {
+        var type = (el.getAttribute('type') || 'text').toLowerCase();
+        return ['button', 'checkbox', 'radio', 'submit', 'reset', 'range', 'color', 'file', 'image', 'hidden'].indexOf(type) === -1;
+      }
+      return el.isContentEditable === true;
+    }
+
+    function inputModeFor(el) {
+      try {
+        var mode = (el.getAttribute('inputmode') || '').toLowerCase();
+        if (mode) { return mode; }
+        var type = (el.getAttribute('type') || '').toLowerCase();
+        if (type === 'number' || type === 'tel') { return 'numeric'; }
+      } catch (e) {}
+      return 'text';
+    }
+
+    var hideTimer = null;
+    document.addEventListener('focusin', function(e) {
+      if (!isEditable(e.target)) { return; }
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+      notifyPassive('keyboardShow', 'type=' + encodeURIComponent(inputModeFor(e.target)));
+    }, true);
+    document.addEventListener('focusout', function(e) {
+      if (!isEditable(e.target)) { return; }
+      if (hideTimer) { clearTimeout(hideTimer); }
+      // Debounced so focus hopping between fields doesn't flicker the keyboard.
+      hideTimer = setTimeout(function() {
+        hideTimer = null;
+        if (!isEditable(document.activeElement)) {
+          notifyPassive('keyboardHide');
+        }
+      }, 120);
+    }, true);
+  }
+
   applyMobilePreviewStyles();
   applyDragToScroll();
+  applyKeyboardFocusTracking();
 
   function ensureStashSdkBridge() {
     window.stash_sdk = window.stash_sdk || {};

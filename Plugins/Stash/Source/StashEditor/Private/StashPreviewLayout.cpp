@@ -78,35 +78,21 @@ namespace
 	}
 }
 
-bool StashPreviewIsTabletDevice(
-	EStashPreviewDevicePreset Preset,
-	float CustomDeviceWidth,
-	float CustomDeviceHeight)
-{
-	switch (Preset)
-	{
-	case EStashPreviewDevicePreset::iPad:
-	case EStashPreviewDevicePreset::iPadPro:
-		return true;
-	case EStashPreviewDevicePreset::Custom:
-		return FMath::Max(CustomDeviceWidth, CustomDeviceHeight) >= 768.f;
-	default:
-		return false;
-	}
-}
-
 FStashPreviewSheetLayout StashPreviewComputeCardLayout(
 	const FStashCardConfig& Config,
-	float DeviceW,
-	float DeviceH,
-	bool bDeviceLandscape,
-	bool bIsTabletDevice)
+	const FStashPreviewDeviceSpec& Spec,
+	bool bDeviceLandscape)
 {
 	FStashPreviewSheetLayout Layout;
-	Layout.bIsTablet = bIsTabletDevice;
+	Layout.bIsTablet = Spec.bTablet;
 	const bool bPortrait = UsePortraitLayout(bDeviceLandscape, Config.bForcePortrait);
+	const bool bEffectiveLandscape = !bPortrait;
+	const FVector2D DeviceSize = Spec.GetSize(bEffectiveLandscape);
+	const float DeviceW = DeviceSize.X;
+	const float DeviceH = DeviceSize.Y;
+	Layout.SafeArea = Spec.GetInsets(bEffectiveLandscape);
 
-	if (bIsTabletDevice)
+	if (Spec.bTablet)
 	{
 		if (bPortrait)
 		{
@@ -147,20 +133,22 @@ FStashPreviewSheetLayout StashPreviewComputeCardLayout(
 
 FStashPreviewSheetLayout StashPreviewComputeModalLayout(
 	const FStashModalConfig& Config,
-	float DeviceW,
-	float DeviceH,
-	bool bDeviceLandscape,
-	bool bIsTabletDevice)
+	const FStashPreviewDeviceSpec& Spec,
+	bool bDeviceLandscape)
 {
 	FStashPreviewSheetLayout Layout;
-	Layout.bIsTablet = bIsTabletDevice;
+	Layout.bIsTablet = Spec.bTablet;
 	Layout.bIsModal = true;
 	Layout.bCardBottomDrawer = false;
 	Layout.bShowDragHandle = false;
 	Layout.HAlign = HAlign_Center;
 	Layout.VAlign = VAlign_Center;
+	const FVector2D DeviceSize = Spec.GetSize(bDeviceLandscape);
+	const float DeviceW = DeviceSize.X;
+	const float DeviceH = DeviceSize.Y;
+	Layout.SafeArea = Spec.GetInsets(bDeviceLandscape);
 
-	if (bIsTabletDevice)
+	if (Spec.bTablet)
 	{
 		if (bDeviceLandscape)
 		{
@@ -192,22 +180,27 @@ FString StashPreviewDescribeActiveConfig(
 	const FStashPreviewSheetLayout& Layout,
 	const FStashCardConfig& CardConfig,
 	const FStashModalConfig& ModalConfig,
+	const FStashPreviewDeviceSpec& Spec,
 	bool bDeviceLandscape,
 	bool bForcePortrait)
 {
+	// Resolution is shown under the device dropdown; keep this block focused on layout-affecting facts.
+	const FString DeviceLine = FString::Printf(
+		TEXT("safe area: T=%.0f B=%.0f L=%.0f R=%.0f"),
+		Layout.SafeArea.Top, Layout.SafeArea.Bottom, Layout.SafeArea.Left, Layout.SafeArea.Right);
+
 	if (Mode == EStashPreviewPresentationMode::Browser)
 	{
-		return TEXT("Browser: full bleed");
+		return DeviceLine + TEXT("\nBrowser: full bleed");
 	}
 
-	const FString DeviceClass = Layout.bIsTablet ? TEXT("tablet") : TEXT("phone");
 	const FString SheetSize = FString::Printf(TEXT("%.0f x %.0f"), Layout.Width, Layout.Height);
 
 	if (Mode == EStashPreviewPresentationMode::Card)
 	{
 		return FString::Printf(
-			TEXT("Card (%s, %s drawer)\nforcePortrait: %s\nratios: %s\nshell: %s\napplied size: %s"),
-			*DeviceClass,
+			TEXT("%s\nCard (%s drawer)\nforcePortrait: %s\nratios: %s\nshell: %s\napplied size: %s"),
+			*DeviceLine,
 			Layout.bCardBottomDrawer ? TEXT("bottom") : TEXT("centered"),
 			CardConfig.bForcePortrait ? TEXT("yes") : TEXT("no"),
 			*DescribeCardRatios(CardConfig, Layout, bDeviceLandscape, bForcePortrait),
@@ -216,8 +209,8 @@ FString StashPreviewDescribeActiveConfig(
 	}
 
 	return FString::Printf(
-		TEXT("Modal (%s, centered)\nallowDismiss: %s\nratios: %s\nshell: %s\napplied size: %s"),
-		*DeviceClass,
+		TEXT("%s\nModal (centered)\nallowDismiss: %s\nratios: %s\nshell: %s\napplied size: %s"),
+		*DeviceLine,
 		ModalConfig.bAllowDismiss ? TEXT("yes") : TEXT("no"),
 		*DescribeModalRatios(ModalConfig, Layout, bDeviceLandscape),
 		ModalConfig.BackgroundColor.IsEmpty() ? TEXT("(default)") : *ModalConfig.BackgroundColor,
