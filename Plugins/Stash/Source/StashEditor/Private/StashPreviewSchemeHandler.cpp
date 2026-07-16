@@ -3,6 +3,7 @@
 #include "StashPreviewSchemeHandler.h"
 
 #if STASH_HAS_WEBBROWSER
+#include "IWebBrowserSchemeHandler.h"
 #include "StashEditorPreviewService.h"
 #include "StashEditorLog.h"
 #include "WebBrowserModule.h"
@@ -53,17 +54,17 @@ namespace
 		FString RequestUrl;
 	};
 
+	class FStashPreviewSchemeHandlerFactory : public IWebBrowserSchemeHandlerFactory
+	{
+	public:
+		virtual TUniquePtr<IWebBrowserSchemeHandler> Create(FString Verb, FString Url) override
+		{
+			return MakeUnique<FStashPreviewSchemeHandler>(MoveTemp(Url));
+		}
+	};
+
 	FStashPreviewSchemeHandlerFactory GStashPreviewSchemeHandlerFactory;
 	bool bSchemeHandlerRegistered = false;
-#endif
-}
-
-TUniquePtr<IWebBrowserSchemeHandler> FStashPreviewSchemeHandlerFactory::Create(FString Verb, FString Url)
-{
-#if STASH_HAS_WEBBROWSER
-	return MakeUnique<FStashPreviewSchemeHandler>(MoveTemp(Url));
-#else
-	return nullptr;
 #endif
 }
 

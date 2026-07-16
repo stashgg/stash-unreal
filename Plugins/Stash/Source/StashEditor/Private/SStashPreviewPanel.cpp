@@ -36,6 +36,7 @@
 #include "Widgets/Layout/SSplitter.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Images/SImage.h"
+#include "Widgets/SNullWidget.h"
 #include "Widgets/SOverlay.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Styling/AppStyle.h"
@@ -58,6 +59,76 @@ namespace
 	FString PresetOptionLabel(const FStashPreviewDeviceSpec& Spec)
 	{
 		return FString::Printf(TEXT("%s — %s"), *PlatformLabel(Spec.Platform), *Spec.DisplayName);
+	}
+
+	// --- Device-chrome (notch) metrics ---------------------------------------------------------------
+	// Per-notch-type geometry, kept in one table so the notch switch isn't repeated across the status bar,
+	// the portrait/landscape cutout overlays, and the cutout brushes.
+
+	/** Static per-notch metrics. Sentinel -1 = "derive from device size" (resolved in ResolveNotchDims). */
+	struct FStashPreviewNotchMetrics
+	{
+		/** Cutout width, also the portrait status-bar center gap. -1 = derive from device width. */
+		float CutoutWidth = 0.f;
+		float PortraitHeight = 0.f;
+		FMargin PortraitPadding = FMargin(0.f);
+		float LandscapeWidth = 0.f;
+		/** -1 = derive from device height. */
+		float LandscapeHeight = 0.f;
+		FMargin LandscapePadding = FMargin(0.f);
+		/** Cutout brush corner radii (TL, TR, BR, BL). */
+		FVector4 PortraitBrushCorners = FVector4(0.f);
+		FVector4 LandscapeBrushCorners = FVector4(0.f);
+	};
+
+	FStashPreviewNotchMetrics GetNotchMetrics(EStashPreviewNotchType Type)
+	{
+		switch (Type)
+		{
+		case EStashPreviewNotchType::Notch:
+			// Portrait: flush to the top bezel (square top, rounded bottom). Landscape: notch on the leading
+			// (left) edge — square left, rounded right.
+			return { -1.f, 32.f, FMargin(0.f),
+			         32.f, -1.f, FMargin(0.f),
+			         FVector4(0.f, 0.f, 14.f, 14.f), FVector4(0.f, 14.f, 14.f, 0.f) };
+		case EStashPreviewNotchType::DynamicIsland:
+			return { 125.f, 36.f, FMargin(0.f, 11.f, 0.f, 0.f),
+			         36.f, 125.f, FMargin(11.f, 0.f, 0.f, 0.f),
+			         FVector4(18.f, 18.f, 18.f, 18.f), FVector4(18.f, 18.f, 18.f, 18.f) };
+		case EStashPreviewNotchType::PunchHole:
+			return { 20.f, 20.f, FMargin(0.f, 8.f, 0.f, 0.f),
+			         20.f, 20.f, FMargin(8.f, 0.f, 0.f, 0.f),
+			         FVector4(10.f, 10.f, 10.f, 10.f), FVector4(10.f, 10.f, 10.f, 10.f) };
+		default:
+			return FStashPreviewNotchMetrics();
+		}
+	}
+
+	/** Cutout box dimensions resolved for the given orientation and device size. */
+	struct FStashPreviewNotchDims
+	{
+		float Width = 0.f;
+		float Height = 0.f;
+		FMargin Padding = FMargin(0.f);
+	};
+
+	FStashPreviewNotchDims ResolveNotchDims(EStashPreviewNotchType Type, const FVector2D& DeviceSize, bool bLandscape)
+	{
+		const FStashPreviewNotchMetrics M = GetNotchMetrics(Type);
+		FStashPreviewNotchDims Out;
+		if (!bLandscape)
+		{
+			Out.Width = M.CutoutWidth < 0.f ? FMath::Clamp(DeviceSize.X * 0.45f, 120.f, 180.f) : M.CutoutWidth;
+			Out.Height = M.PortraitHeight;
+			Out.Padding = M.PortraitPadding;
+		}
+		else
+		{
+			Out.Width = M.LandscapeWidth;
+			Out.Height = M.LandscapeHeight < 0.f ? FMath::Clamp(DeviceSize.Y * 0.42f, 110.f, 175.f) : M.LandscapeHeight;
+			Out.Padding = M.LandscapePadding;
+		}
+		return Out;
 	}
 
 	/** Presets in combo order: catalog entries followed by Custom. */
@@ -140,6 +211,13 @@ void SStashPreviewPanel::Construct(const FArguments& InArgs)
 		]
 	];
 	RefreshFromSession();
+}
+SStashPreviewPanel::~SStashPreviewPanel()
+{
+	// Symmetric with RegisterPreviewPanel in Construct. The service prunes stale weak refs on its own, but
+	// unregistering here keeps its panel list tidy. Passing an empty ptr removes the now-expired weak entry
+	// (this instance) without needing a shared ref to a destructing object.
+	FStashEditorPreviewService::Get()->UnregisterPreviewPanel(nullptr);
 }
 void SStashPreviewPanel::RefreshFromSession()
 {
@@ -234,8 +312,9 @@ void SStashPreviewPanel::RefreshFromSession()
 		{
 			LastSyncedViewportSize = FVector2D::ZeroVector;
 		}
+		// EnsureBrowserForUrl arms the load-failure timer only when it actually kicks off a load, so a
+		// mid-load session refresh (keyboard toggle, simulate button) no longer postpones NotifyLoadError.
 		EnsureBrowserForUrl(Session.CurrentUrl);
-		NetworkTimeoutRemaining = 5.f;
 	}
 	else
 	{
@@ -304,15 +383,10 @@ float SStashPreviewPanel::GetStatusCutoutWidth() const
 {
 	if (GetEffectiveLandscape())
 	{
+		// Landscape status bar isn't split by a center cutout.
 		return 0.f;
 	}
-	switch (GetSelectedDeviceSpec().NotchType)
-	{
-	case EStashPreviewNotchType::Notch:         return FMath::Clamp(GetSelectedDeviceSize().X * 0.45f, 120.f, 180.f);
-	case EStashPreviewNotchType::DynamicIsland: return 125.f;
-	case EStashPreviewNotchType::PunchHole:     return 24.f;
-	default:                                    return 0.f;
-	}
+	return ResolveNotchDims(GetSelectedDeviceSpec().NotchType, GetSelectedDeviceSize(), false).Width;
 }
 bool SStashPreviewPanel::ShouldShowCellular() const
 {
@@ -457,7 +531,8 @@ FMargin SStashPreviewPanel::ComputeSheetPadding(const FStashPreviewSheetLayout& 
 		// Browser: full bleed; the keyboard shrinks it from the bottom (adjustResize / visualViewport).
 		if (Session.bKeyboardVisible)
 		{
-			Padding.Bottom = FMath::Min(GetKeyboardHeight(), DeviceH * 0.6f);
+			// GetKeyboardHeight already caps at half the screen, so no extra cap is needed here.
+			Padding.Bottom = GetKeyboardHeight();
 		}
 		return Padding;
 	}
@@ -539,7 +614,8 @@ FVector2D SStashPreviewPanel::GetWebViewportSize() const
 		FVector2D Size = GetSelectedDeviceSize();
 		if (Session.bKeyboardVisible)
 		{
-			Size.Y = FMath::Max(1.f, Size.Y - FMath::Min(GetKeyboardHeight(), Size.Y * 0.6f));
+			// GetKeyboardHeight already caps at half the screen height.
+			Size.Y = FMath::Max(1.f, Size.Y - GetKeyboardHeight());
 		}
 		return Size;
 	}
@@ -656,10 +732,12 @@ void SStashPreviewPanel::Tick(const FGeometry& AllottedGeometry, const double In
 		LastSyncedActivePlatform = CachedDeviceSpec.Platform;
 		FStashEditorPreviewService::Get()->SetActivePlatform(CachedDeviceSpec.Platform);
 	}
-	if (CachedDeviceSpec.UserAgent != FStashEditorPreviewService::Get()->GetPreviewUserAgent())
+	if (CachedDeviceSpec.UserAgent != LastPushedUserAgent)
 	{
 		// Live Project Settings edits (Custom platform / size crossing the tablet threshold) change the
 		// emulated user-agent; push it and reload so the page re-fetches with the new platform identity.
+		// Compared against this panel's own last-pushed UA (not the service-global) so two panels with
+		// different presets can't ping-pong reloads by each "correcting" the shared value every frame.
 		PushDeviceEmulation(true);
 	}
 
@@ -725,11 +803,7 @@ FReply SStashPreviewPanel::OnReloadClicked()
 	const FStashPreviewSession& Session = FStashEditorPreviewService::Get()->GetSession();
 	if (Session.bIsOpen && WebBrowser.IsValid())
 	{
-		FStashEditorPreviewService::Get()->GetMutableSession().LoadStartSeconds = FApp::GetCurrentTime();
-		FStashEditorPreviewService::Get()->GetMutableSession().bPageLoadedFired = false;
-		NetworkTimeoutRemaining = 5.f;
-		WebBrowser->LoadURL(Session.CurrentUrl);
-		InjectStashSdkScript();
+		StartLoad(Session.CurrentUrl);
 	}
 	return FReply::Handled();
 }
@@ -802,7 +876,8 @@ void SStashPreviewPanel::OnDevicePresetChanged(TSharedPtr<FString> NewSelection,
 	PushDeviceEmulation(true);
 	RebuildPreviewChrome();
 }
-void SStashPreviewPanel::HandlePreviewSchemeNavigation(const FString& Url)
+// --- Browser hosting & callback plumbing -------------------------------------------------------------
+void SStashPreviewPanel::HandlePreviewSchemeNavigation(const FString& Url, bool bRestoreAfterBlank)
 {
 	if (!Url.StartsWith(StashPreviewJsBridge::SchemePrefix))
 	{
@@ -825,14 +900,16 @@ void SStashPreviewPanel::HandlePreviewSchemeNavigation(const FString& Url)
 	}
 
 #if STASH_HAS_WEBBROWSER
-	if (WebBrowser.IsValid())
+	// Only the OnLoadUrl scheme-handler path blanks the webview (it answers the request with an empty
+	// document), so it alone needs the checkout page restored. Console-message / blocked-navigation
+	// callbacks leave the page intact — reloading them would wipe in-page state and visibly flash.
+	if (bRestoreAfterBlank && WebBrowser.IsValid())
 	{
 		WebBrowser->StopLoad();
 		const FStashPreviewSession& Session = FStashEditorPreviewService::Get()->GetSession();
 		if (Session.bIsOpen && !LastLoadedUrl.IsEmpty())
 		{
-			WebBrowser->LoadURL(LastLoadedUrl);
-			InjectStashSdkScript();
+			StartLoad(LastLoadedUrl);
 		}
 		else if (WebBrowser->CanGoBack())
 		{
@@ -849,7 +926,8 @@ bool SStashPreviewPanel::HandlePreviewLoadUrl(const FString& Method, const FStri
 		return false;
 	}
 
-	HandlePreviewSchemeNavigation(Url);
+	// This path answers the request with a blank document below, so ask for the checkout page to be restored.
+	HandlePreviewSchemeNavigation(Url, /*bRestoreAfterBlank*/ true);
 	OutResponse = TEXT("<!DOCTYPE html><html><body></body></html>");
 	return true;
 }
@@ -919,21 +997,41 @@ void SStashPreviewPanel::InjectStashSdkScript()
 	}
 #endif
 }
+void SStashPreviewPanel::ArmLoadTimer()
+{
+	// Reset load-progress state and arm the failure timer for a load that is about to start. Called only
+	// when a load actually begins, so a session refresh mid-load can't keep postponing NotifyLoadError.
+	FStashPreviewSession& Session = FStashEditorPreviewService::Get()->GetMutableSession();
+	Session.LoadStartSeconds = FApp::GetCurrentTime();
+	Session.bPageLoadedFired = false;
+	NetworkTimeoutRemaining = LoadTimeoutSeconds;
+}
+void SStashPreviewPanel::StartLoad(const FString& Url)
+{
+#if STASH_HAS_WEBBROWSER
+	if (!WebBrowser.IsValid())
+	{
+		return;
+	}
+	ArmLoadTimer();
+	// Authoritative SDK injection happens in HandleLoadCompleted; no best-effort inject needed here.
+	WebBrowser->LoadURL(Url);
+#endif
+}
 void SStashPreviewPanel::PushDeviceEmulation(bool bReload)
 {
 	const FStashPreviewDeviceSpec& Spec = GetSelectedDeviceSpec();
 	const FString PlatformHint = Spec.Platform == EStashPreviewPlatform::Android ? TEXT("Android") : TEXT("iOS");
 	FStashEditorPreviewService::Get()->SetPreviewDeviceEmulation(Spec.UserAgent, !Spec.bTablet, PlatformHint);
+	// Remember what THIS panel pushed so the per-Tick UA sync compares against its own state, not the global.
+	LastPushedUserAgent = Spec.UserAgent;
 #if STASH_HAS_WEBBROWSER
 	if (bReload && WebBrowser.IsValid())
 	{
 		const FStashPreviewSession& Session = FStashEditorPreviewService::Get()->GetSession();
 		if (Session.bIsOpen && !Session.CurrentUrl.IsEmpty())
 		{
-			FStashEditorPreviewService::Get()->GetMutableSession().LoadStartSeconds = FApp::GetCurrentTime();
-			FStashEditorPreviewService::Get()->GetMutableSession().bPageLoadedFired = false;
-			NetworkTimeoutRemaining = 5.f;
-			WebBrowser->LoadURL(Session.CurrentUrl);
+			StartLoad(Session.CurrentUrl);
 		}
 	}
 #endif
@@ -982,15 +1080,27 @@ void SStashPreviewPanel::EnsureBrowserForUrl(const FString& Url)
 			.OnLoadCompleted(this, &SStashPreviewPanel::HandleLoadCompleted)
 			.OnLoadUrl(this, &SStashPreviewPanel::HandlePreviewLoadUrl)
 			.OnConsoleMessage(this, &SStashPreviewPanel::HandlePreviewConsoleMessage);
+		// The InitialURL kicks off a load; arm the load-failure timer for it.
+		ArmLoadTimer();
 	}
 	else if (bUrlChanged)
 	{
-		WebBrowser->LoadURL(Url);
+		StartLoad(Url);
 	}
 	if (WebBrowser.IsValid())
 	{
 		if (SBox* ActiveWebBox = GetActiveWebContentBox())
 		{
+			// Detach the browser from the other host first: PrepareSession switches PresentationMode in place
+			// (e.g. OpenModal over an open card), so without this the one SWebBrowser would briefly be a child
+			// of two slots — breaking Slate's parent-pointer/invalidation assumptions.
+			SBox* InactiveWebBox = (ActiveWebBox == ModalWebContentBox.Get())
+				? CardWebContentBox.Get()
+				: ModalWebContentBox.Get();
+			if (InactiveWebBox && InactiveWebBox != ActiveWebBox)
+			{
+				InactiveWebBox->SetContent(SNullWidget::NullWidget);
+			}
 			ActiveWebBox->SetContent(WebBrowser.ToSharedRef());
 		}
 	}
@@ -1000,33 +1110,17 @@ void SStashPreviewPanel::EnsureBrowserForUrl(const FString& Url)
 }
 FLinearColor SStashPreviewPanel::ParseBackgroundColor(const FString& HtmlHex) const
 {
-	FString Hex = HtmlHex.TrimStartAndEnd();
-	if (Hex.IsEmpty())
+	// BackgroundColor is an HTML/CSS hex string, matching stash-native's convention: #RGB, #RRGGBB, or
+	// #RRGGBBAA — i.e. 8-digit values are RRGGBBAA (alpha last), NOT AARRGGBB. FColor::FromHex handles all
+	// three CSS forms; the value is authored in sRGB space, so decode to linear for Slate brushes.
+	const FLinearColor Fallback(0.12f, 0.12f, 0.14f, 1.f);
+	const FString Trimmed = HtmlHex.TrimStartAndEnd();
+	const FString Hex = Trimmed.StartsWith(TEXT("#")) ? Trimmed.Mid(1) : Trimmed;
+	if (Hex.Len() != 3 && Hex.Len() != 4 && Hex.Len() != 6 && Hex.Len() != 8)
 	{
-		return FLinearColor(0.12f, 0.12f, 0.14f, 1.f);
+		return Fallback;
 	}
-	if (Hex.StartsWith(TEXT("#")))
-	{
-		Hex = Hex.Mid(1);
-	}
-	uint32 Value = 0;
-	if (Hex.Len() == 3)
-	{
-		const uint32 R = FParse::HexDigit(Hex[0]);
-		const uint32 G = FParse::HexDigit(Hex[1]);
-		const uint32 B = FParse::HexDigit(Hex[2]);
-		return FLinearColor(R / 15.f, G / 15.f, B / 15.f, 1.f);
-	}
-	if (Hex.Len() == 6 || Hex.Len() == 8)
-	{
-		Value = FParse::HexNumber(*Hex);
-		const float A = Hex.Len() == 8 ? ((Value >> 24) & 0xFF) / 255.f : 1.f;
-		const float R = ((Value >> 16) & 0xFF) / 255.f;
-		const float G = ((Value >> 8) & 0xFF) / 255.f;
-		const float B = (Value & 0xFF) / 255.f;
-		return FLinearColor(R, G, B, A);
-	}
-	return FLinearColor(0.12f, 0.12f, 0.14f, 1.f);
+	return FLinearColor::FromSRGBColor(FColor::FromHex(Trimmed));
 }
 void SStashPreviewPanel::UpdateBackdropBrush(const FStashPreviewSession& Session)
 {
@@ -1072,6 +1166,7 @@ void SStashPreviewPanel::UpdateSheetBrushes()
 	}
 }
 
+// --- Device chrome (bezel, notch, status bar, home indicator) ----------------------------------------
 void SStashPreviewPanel::RebuildDeviceChromeBrushes()
 {
 	// Keep the cache current: this runs from Construct and on preset change, before the spec is read below.
@@ -1082,26 +1177,18 @@ void SStashPreviewPanel::RebuildDeviceChromeBrushes()
 	BezelBrush = MakeShared<FSlateRoundedBoxBrush>(BezelColor, BezelRadius);
 
 	const FLinearColor CutoutColor(0.f, 0.f, 0.f, 1.f);
-	switch (Spec.NotchType)
+	if (Spec.NotchType == EStashPreviewNotchType::None)
 	{
-	case EStashPreviewNotchType::Notch:
-		// Flush to the top bezel: square top corners, rounded bottom.
-		NotchBrush = MakeShared<FSlateRoundedBoxBrush>(CutoutColor, FVector4(0.f, 0.f, 14.f, 14.f));
-		// Landscape: notch moves to the leading (left) edge — square left, rounded right.
-		NotchBrushLandscape = MakeShared<FSlateRoundedBoxBrush>(CutoutColor, FVector4(0.f, 0.f, 14.f, 14.f));
-		break;
-	case EStashPreviewNotchType::DynamicIsland:
-		NotchBrush = MakeShared<FSlateRoundedBoxBrush>(CutoutColor, 18.f);
-		NotchBrushLandscape = MakeShared<FSlateRoundedBoxBrush>(CutoutColor, 18.f);
-		break;
-	case EStashPreviewNotchType::PunchHole:
-		NotchBrush = MakeShared<FSlateRoundedBoxBrush>(CutoutColor, 10.f);
-		NotchBrushLandscape = MakeShared<FSlateRoundedBoxBrush>(CutoutColor, 10.f);
-		break;
-	default:
 		NotchBrush.Reset();
 		NotchBrushLandscape.Reset();
-		break;
+	}
+	else
+	{
+		// Corner radii per notch type come from the shared metrics table (notch is square on the bezel-flush
+		// edge, rounded on the free edge; island/punch-hole are uniform pills).
+		const FStashPreviewNotchMetrics Metrics = GetNotchMetrics(Spec.NotchType);
+		NotchBrush = MakeShared<FSlateRoundedBoxBrush>(CutoutColor, Metrics.PortraitBrushCorners);
+		NotchBrushLandscape = MakeShared<FSlateRoundedBoxBrush>(CutoutColor, Metrics.LandscapeBrushCorners);
 	}
 
 	// White brush; the overlay tints it to contrast with the content beneath.
@@ -1309,23 +1396,11 @@ TSharedRef<SWidget> SStashPreviewPanel::BuildDeviceChromeOverlays()
 			SNew(SBox)
 			.WidthOverride_Lambda([this]() -> FOptionalSize
 			{
-				switch (GetSelectedDeviceSpec().NotchType)
-				{
-				case EStashPreviewNotchType::Notch:         return GetStatusCutoutWidth();
-				case EStashPreviewNotchType::DynamicIsland: return 125.f;
-				case EStashPreviewNotchType::PunchHole:     return 20.f;
-				default:                                    return 0.f;
-				}
+				return ResolveNotchDims(GetSelectedDeviceSpec().NotchType, GetSelectedDeviceSize(), false).Width;
 			})
 			.HeightOverride_Lambda([this]() -> FOptionalSize
 			{
-				switch (GetSelectedDeviceSpec().NotchType)
-				{
-				case EStashPreviewNotchType::Notch:         return 32.f;
-				case EStashPreviewNotchType::DynamicIsland: return 36.f;
-				case EStashPreviewNotchType::PunchHole:     return 20.f;
-				default:                                    return 0.f;
-				}
+				return ResolveNotchDims(GetSelectedDeviceSpec().NotchType, GetSelectedDeviceSize(), false).Height;
 			})
 			.Padding(0.f)
 			.Visibility_Lambda([this, ChromeVisible]()
@@ -1340,12 +1415,7 @@ TSharedRef<SWidget> SStashPreviewPanel::BuildDeviceChromeOverlays()
 				SNew(SBox)
 				.Padding_Lambda([this]()
 				{
-					switch (GetSelectedDeviceSpec().NotchType)
-					{
-					case EStashPreviewNotchType::DynamicIsland: return FMargin(0.f, 11.f, 0.f, 0.f);
-					case EStashPreviewNotchType::PunchHole:     return FMargin(0.f, 8.f, 0.f, 0.f);
-					default:                                    return FMargin(0.f);
-					}
+					return ResolveNotchDims(GetSelectedDeviceSpec().NotchType, GetSelectedDeviceSize(), false).Padding;
 				})
 				[
 					SNew(SImage)
@@ -1362,32 +1432,15 @@ TSharedRef<SWidget> SStashPreviewPanel::BuildDeviceChromeOverlays()
 			SNew(SBox)
 			.WidthOverride_Lambda([this]() -> FOptionalSize
 			{
-				switch (GetSelectedDeviceSpec().NotchType)
-				{
-				case EStashPreviewNotchType::Notch:         return 32.f;
-				case EStashPreviewNotchType::DynamicIsland: return 36.f;
-				case EStashPreviewNotchType::PunchHole:     return 20.f;
-				default:                                    return 0.f;
-				}
+				return ResolveNotchDims(GetSelectedDeviceSpec().NotchType, GetSelectedDeviceSize(), true).Width;
 			})
 			.HeightOverride_Lambda([this]() -> FOptionalSize
 			{
-				switch (GetSelectedDeviceSpec().NotchType)
-				{
-				case EStashPreviewNotchType::Notch:         return FMath::Clamp(GetSelectedDeviceSize().Y * 0.42f, 110.f, 175.f);
-				case EStashPreviewNotchType::DynamicIsland: return 125.f;
-				case EStashPreviewNotchType::PunchHole:     return 20.f;
-				default:                                    return 0.f;
-				}
+				return ResolveNotchDims(GetSelectedDeviceSpec().NotchType, GetSelectedDeviceSize(), true).Height;
 			})
 			.Padding_Lambda([this]()
 			{
-				switch (GetSelectedDeviceSpec().NotchType)
-				{
-				case EStashPreviewNotchType::DynamicIsland: return FMargin(11.f, 0.f, 0.f, 0.f);
-				case EStashPreviewNotchType::PunchHole:     return FMargin(8.f, 0.f, 0.f, 0.f);
-				default:                                    return FMargin(0.f);
-				}
+				return ResolveNotchDims(GetSelectedDeviceSpec().NotchType, GetSelectedDeviceSize(), true).Padding;
 			})
 			.Visibility_Lambda([this, ChromeVisible]()
 			{
@@ -1559,6 +1612,7 @@ TSharedRef<SWidget> SStashPreviewPanel::BuildDeviceChromeOverlays()
 			.MaskColor(FLinearColor(0.015f, 0.015f, 0.02f, 1.f))
 		];
 }
+// --- Widget builders (preview area & controls panel) -------------------------------------------------
 TSharedRef<SWidget> SStashPreviewPanel::BuildDevicePreviewArea()
 {
 	return SNew(SBorder)
@@ -1693,6 +1747,9 @@ TSharedRef<SWidget> SStashPreviewPanel::BuildDevicePreviewArea()
 												})
 												[
 													SAssignNew(DraggableSheet, SStashPreviewDraggableSheet)
+													// Match the drag hit region to the visible handle chrome so the extra band (which the
+													// webview would consume mouse-downs from anyway) isn't an unreachable trap.
+													.DragHeaderHeight(SStashPreviewPanel::DragHandleChromeHeight)
 													.SheetHeight_Lambda([this]() { return ComputeCurrentLayout().Height; })
 													.BaseSheetHeight_Lambda([this]() { return ComputeCardBaseLayout().Height; })
 													.MaxExpandHeight_Lambda([this]() { return GetCardMaxExpandedHeight(); })

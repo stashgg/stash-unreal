@@ -56,11 +56,9 @@ namespace
 		OutBytes.Append(Compressed.GetData(), static_cast<int32>(Compressed.Num()));
 		return OutBytes;
 	}
-#endif
 
 	static void CaptureViewportToJpegBytesAsync(TFunction<void(TArray<uint8>&&)> OnComplete, int32 AttemptIndex)
 	{
-#if PLATFORM_ANDROID
 		if (!IsInGameThread())
 		{
 			UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] CaptureViewport: must run on game thread"));
@@ -82,6 +80,14 @@ namespace
 			return;
 		}
 
+		// Warm the ImageWrapper module here (game thread) so the background-thread JPEG encode only fetches
+		// the already-loaded instance — FModuleManager loading is game-thread-only.
+		FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+
+		// Resolve the render-target decision on the game thread and capture only refcounted RHI refs.
+		// Never capture the raw FSceneViewport* — it may be destroyed (backgrounding / surface loss on
+		// Android, exactly the rotation window this targets) between enqueue and render-thread execution.
+		const FTextureRHIRef RenderTargetTextureRHI = SceneViewport->GetRenderTargetTexture();
 		const FViewportRHIRef ViewportRHIRef = SceneViewport->GetViewportRHI();
 
 		struct FStashBackdropCaptureState
@@ -99,10 +105,10 @@ namespace
 			Size.X, Size.Y, AttemptIndex + 1, StashBackdropMaxCaptureAttempts, ViewportRHIRef.IsValid() ? 1 : 0);
 
 		ENQUEUE_RENDER_COMMAND(StashBackdropCaptureViewport)(
-			[SceneViewport, ViewportRHIRef, State](FRHICommandListImmediate& RHICmdList)
+			[RenderTargetTextureRHI, ViewportRHIRef, State](FRHICommandListImmediate& RHICmdList)
 			{
 				TArray<FColor> Bitmap;
-				FTextureRHIRef TextureRef = SceneViewport->GetRenderTargetTexture();
+				FTextureRHIRef TextureRef = RenderTargetTextureRHI;
 				const TCHAR* TextureSource = TEXT("scene-render-target");
 				if (!TextureRef.IsValid() && ViewportRHIRef.IsValid())
 				{
@@ -125,7 +131,9 @@ namespace
 				const FIntRect SrcRect(0, 0, State->Size.X, State->Size.Y);
 				RHICmdList.ReadSurfaceData(TextureRef, SrcRect, Bitmap, ReadFlags);
 
-				AsyncTask(ENamedThreads::GameThread, [State, Bitmap = MoveTemp(Bitmap), TextureSource]() mutable
+				// Encode off the game thread — full-viewport JPEG compression is multi-MB and would hitch the
+				// frame right before checkout opens. Hop back to the game thread only for OnComplete.
+				AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [State, Bitmap = MoveTemp(Bitmap), TextureSource]() mutable
 					{
 						TArray<uint8> JpegBytes = EncodeViewportBitmapToJpeg(Bitmap, State->Size);
 						if (JpegBytes.Num() > 0)
@@ -138,15 +146,14 @@ namespace
 							UE_LOG(LogStash, Verbose, TEXT("[StashBackdrop] CaptureViewport: readback empty from %s %dx%d (attempt %d)"),
 								TextureSource, State->Size.X, State->Size.Y, State->AttemptIndex + 1);
 						}
-						State->OnComplete(MoveTemp(JpegBytes));
+						AsyncTask(ENamedThreads::GameThread, [State, JpegBytes = MoveTemp(JpegBytes)]() mutable
+							{
+								State->OnComplete(MoveTemp(JpegBytes));
+							});
 					});
 			});
-#else
-		OnComplete(TArray<uint8>());
-#endif
 	}
 
-#if PLATFORM_ANDROID
 	static void ScheduleViewportCaptureAttempt(TSharedRef<FStashCaptureRetryState> State)
 	{
 		if (!State->WeakWorld.IsValid())
@@ -234,8 +241,16 @@ namespace
 		TArray<uint8>& OutImageBytes,
 		const FLatentActionInfo& LatentInfo)
 	{
-		TSharedRef<FStashLatentCaptureState> CaptureState = MakeShared<FStashLatentCaptureState>();
 		FLatentActionManager& LatentManager = World->GetLatentActionManager();
+		// Ignore re-entry while a capture is already in flight for this UUID (same guard as
+		// UKismetSystemLibrary::Delay). Without it the Completed pin fires twice and two writers
+		// race on the same OutImageBytes persistent-frame reference.
+		if (LatentManager.FindExistingAction<FStashViewportCaptureLatentAction>(LatentInfo.CallbackTarget, LatentInfo.UUID) != nullptr)
+		{
+			return;
+		}
+
+		TSharedRef<FStashLatentCaptureState> CaptureState = MakeShared<FStashLatentCaptureState>();
 		// FPendingLatentAction is heap-allocated; FLatentActionManager owns and deletes it.
 		FStashViewportCaptureLatentAction* LatentAction = new FStashViewportCaptureLatentAction(LatentInfo, OutImageBytes, CaptureState);
 		LatentManager.AddNewAction(LatentInfo.CallbackTarget, LatentInfo.UUID, LatentAction);

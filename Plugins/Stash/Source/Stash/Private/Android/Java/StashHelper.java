@@ -34,6 +34,13 @@ public class StashHelper {
     private static final String TAG = "StashHelper";
     /** Filter logcat: adb logcat -s StashHelper:I *:S | grep StashBackdrop */
     private static final String BTAG = "[StashBackdrop]";
+    // AND-03: purchase-processing detection reflects into stash-native PRIVATE internals. Every name
+    // below is coupled to stash-native's implementation (verified present in StashNative-2.2.4.aar):
+    //   - class  com.stash.stashnative.StashNativeCardPortraitActivity  (+ its private "isPurchaseProcessing" and "webView" fields)
+    //   - field  StashNativeCard.plugin  → plugin.webView / plugin.currentDialog  (see resolveCheckoutWebView)
+    // An SDK rename/refactor/obfuscation breaks these silently (Log.w only). If you bump the AAR, re-verify
+    // these class/field names in review. This reflection also depends on the "-keep class com.stash.** { *; }"
+    // ProGuard rule in Stash_UPL_Android.xml — without it R8 would strip these private fields. Keep the two coupled.
     private static final String PORTRAIT_ACTIVITY_CLASS =
             "com.stash.stashnative.StashNativeCardPortraitActivity";
     private static volatile boolean isInitialized = false;
@@ -55,12 +62,22 @@ public class StashHelper {
     public static native void nativeOnPurchaseProcessing();
     public static native void nativeOnProcessingCompleted();
 
-    private static boolean lastReportedPurchaseProcessing = false;
-    private static boolean purchaseProcessingPollActive = false;
-    private static boolean purchaseProcessingPollSeenPresentation = false;
+    // AND-06: these flags are mutated from the main-thread poll AND from the SDK listener
+    // (onDialogDismissed, whose thread is not guaranteed), so they are volatile. The
+    // @JavascriptInterface bridge callbacks hop onto mainHandler so every write via
+    // reportPurchaseProcessingState stays on the main thread.
+    private static volatile boolean lastReportedPurchaseProcessing = false;
+    private static volatile boolean purchaseProcessingPollActive = false;
+    private static volatile boolean purchaseProcessingPollSeenPresentation = false;
     private static final long PURCHASE_PROCESSING_POLL_MS = 75L;
+    // AND-05: stop the pre-presentation poll if openCard never reaches isCurrentlyPresented()
+    // (bad URL, SDK failure) so the 75 ms runnable does not reschedule forever.
+    private static final long PURCHASE_PROCESSING_PRESENT_TIMEOUT_MS = 15000L;
+    private static long purchaseProcessingPollStartMs = 0L;
     private static final StashProcessingBridge PROCESSING_BRIDGE = new StashProcessingBridge();
     private static volatile WebView processingBridgeWebView;
+    /** AND-05: true once PROCESSING_WRAP_JS has been evaluated for the current page; reset on each (re)load. */
+    private static volatile boolean processingBridgeWrapped = false;
     /** Re-wraps stash_sdk after SDK injection (one-shot guard blocked re-wrap and missed portrait checkout). */
     private static final String PROCESSING_WRAP_JS =
         "(function(){"
@@ -82,12 +99,14 @@ public class StashHelper {
     private static final class StashProcessingBridge {
         @JavascriptInterface
         public void onPurchaseProcessing() {
-            reportPurchaseProcessingState(true);
+            // AND-06: bridge callbacks arrive on the WebView's JS thread; hop onto the main thread so
+            // all purchase-processing state mutation happens on a single thread (matches the poll).
+            mainHandler.post(() -> reportPurchaseProcessingState(true));
         }
 
         @JavascriptInterface
         public void onProcessingCompleted() {
-            reportPurchaseProcessingState(false);
+            mainHandler.post(() -> reportPurchaseProcessingState(false));
         }
     }
 
@@ -114,10 +133,20 @@ public class StashHelper {
                 return;
             }
             if (processingBridgeWebView != webView) {
+                // AND-04: addJavascriptInterface only exposes "StashUnreal" to JS on the WebView's NEXT
+                // page (re)load — the object is not visible to the page already loaded here, and the
+                // wrapping JS swallows the resulting ReferenceError. The 75 ms reflection poll (not this
+                // JS bridge) is therefore the AUTHORITATIVE delivery mechanism for purchase-processing
+                // events; the bridge is only a best-effort supplement for pages loaded after injection.
                 webView.addJavascriptInterface(PROCESSING_BRIDGE, "StashUnreal");
                 processingBridgeWebView = webView;
+                processingBridgeWrapped = false;
             }
-            webView.evaluateJavascript(PROCESSING_WRAP_JS, null);
+            // AND-05: evaluate the wrap JS once per page instead of on every ~75 ms poll tick.
+            if (!processingBridgeWrapped) {
+                webView.evaluateJavascript(PROCESSING_WRAP_JS, null);
+                processingBridgeWrapped = true;
+            }
         } catch (Exception e) {
             Log.w(TAG, "Processing bridge attach failed: " + e.getMessage());
         }
@@ -209,6 +238,8 @@ public class StashHelper {
         }
 
         try {
+            // AND-03: reflects into stash-native private fields ("plugin", then "webView"/"currentDialog").
+            // These names are coupled to the AAR (see PORTRAIT_ACTIVITY_CLASS comment) and to the com.stash.** ProGuard keep.
             StashNativeCard card = StashNativeCard.getInstance();
             Field pluginField = StashNativeCard.class.getDeclaredField("plugin");
             pluginField.setAccessible(true);
@@ -238,6 +269,7 @@ public class StashHelper {
         Activity portraitActivity = getCheckoutPortraitActivity();
         if (portraitActivity != null) {
             try {
+                // AND-03: reflects into the portrait activity's private "isPurchaseProcessing" field (coupled to the AAR).
                 Field field = portraitActivity.getClass().getDeclaredField("isPurchaseProcessing");
                 field.setAccessible(true);
                 return field.getBoolean(portraitActivity);
@@ -253,6 +285,8 @@ public class StashHelper {
     }
 
     private static void scheduleProcessingBridgeAttach() {
+        // AND-05: a page (re)load invalidates any previously injected wrap; force re-evaluation on the next attach.
+        processingBridgeWrapped = false;
         mainHandler.post(StashHelper::attachProcessingBridge);
         mainHandler.postDelayed(StashHelper::attachProcessingBridge, 250);
         mainHandler.postDelayed(StashHelper::attachProcessingBridge, 750);
@@ -275,6 +309,13 @@ public class StashHelper {
                         return;
                     }
                     if (purchaseProcessingPollActive) {
+                        // AND-05: give up if the card never presents (bad URL / SDK failure) instead of
+                        // rescheduling forever. Once presentation is seen this branch no longer applies.
+                        if (System.currentTimeMillis() - purchaseProcessingPollStartMs >= PURCHASE_PROCESSING_PRESENT_TIMEOUT_MS) {
+                            Log.w(TAG, "Purchase processing poll timed out waiting for card presentation; stopping.");
+                            purchaseProcessingPollActive = false;
+                            return;
+                        }
                         mainHandler.postDelayed(this, PURCHASE_PROCESSING_POLL_MS);
                     }
                     return;
@@ -296,6 +337,7 @@ public class StashHelper {
         if (!purchaseProcessingPollActive) {
             purchaseProcessingPollActive = true;
             purchaseProcessingPollSeenPresentation = false;
+            purchaseProcessingPollStartMs = System.currentTimeMillis();
             mainHandler.post(purchaseProcessingPollRunnable);
         }
     }
@@ -406,7 +448,8 @@ public class StashHelper {
 
                 @Override
                 public void onExternalPayment(String url) {
-                    Log.d(TAG, "External payment URL: " + url);
+                    // AND-14: external-payment URLs may carry tokens; log length only, not the full URL.
+                Log.d(TAG, "External payment urlLen=" + (url != null ? url.length() : 0));
                     try {
                         nativeOnExternalPayment(url != null ? url : "");
                     } catch (Exception e) {
@@ -444,7 +487,8 @@ public class StashHelper {
         if (!isInitialized) {
             Initialize(activity);
         }
-        Log.d(TAG, "Opening card with URL: " + url);
+        // AND-14: checkout URLs carry session/checkout tokens; log length only (see OpenCardWithConfig urlLen).
+        Log.d(TAG, "Opening card urlLen=" + url.length());
         activity.runOnUiThread(() -> {
             try {
                 StashNativeCard.getInstance().openCard(url, null);
@@ -706,7 +750,8 @@ public class StashHelper {
         if (!isInitialized) {
             Initialize(activity);
         }
-        Log.d(TAG, "Opening modal with URL: " + url);
+        // AND-14: log length only, not the token-bearing URL.
+        Log.d(TAG, "Opening modal urlLen=" + url.length());
         activity.runOnUiThread(() -> {
             try {
                 StashNativeCard.getInstance().openModal(url, null);
@@ -739,7 +784,8 @@ public class StashHelper {
         if (!isInitialized) {
             Initialize(activity);
         }
-        Log.d(TAG, "Opening modal with config: " + url);
+        // AND-14: log length only, not the token-bearing URL.
+        Log.d(TAG, "Opening modal with config urlLen=" + url.length());
         activity.runOnUiThread(() -> {
             try {
                 StashNativeCard.ModalConfig config = new StashNativeCard.ModalConfig();
@@ -768,14 +814,21 @@ public class StashHelper {
      */
     @Keep
     public static void SetKeepAliveEnabled(Activity activity, boolean enabled) {
-        if (activity != null && !isInitialized) {
+        // AND-15: mirror the other entry points — require non-null activity, ensure init, hop to the UI thread.
+        if (activity == null) {
+            Log.e(TAG, "Error: Cannot set keep-alive enabled with null activity");
+            return;
+        }
+        if (!isInitialized) {
             Initialize(activity);
         }
-        try {
-            StashNativeCard.getInstance().setKeepAliveEnabled(enabled);
-        } catch (Exception e) {
-            Log.e(TAG, "Error setKeepAliveEnabled: " + e.getMessage());
-        }
+        activity.runOnUiThread(() -> {
+            try {
+                StashNativeCard.getInstance().setKeepAliveEnabled(enabled);
+            } catch (Exception e) {
+                Log.e(TAG, "Error setKeepAliveEnabled: " + e.getMessage());
+            }
+        });
     }
 
     /**
@@ -789,35 +842,38 @@ public class StashHelper {
             String notificationTitle,
             String notificationText,
             String notificationIconDrawableName) {
-        if (activity != null && !isInitialized) {
+        // AND-15: mirror the other entry points — require non-null activity, ensure init, hop to the UI thread.
+        if (activity == null) {
+            Log.e(TAG, "Error: Cannot set keep-alive config with null activity");
+            return;
+        }
+        if (!isInitialized) {
             Initialize(activity);
         }
-        try {
-            StashNativeCard.KeepAliveConfig cfg = new StashNativeCard.KeepAliveConfig();
-            cfg.notificationTitle = notificationTitle != null ? notificationTitle : "";
-            cfg.notificationText = notificationText != null ? notificationText : "";
-            int iconResId = 0;
-            if (notificationIconDrawableName != null) {
-                String name = notificationIconDrawableName.trim();
-                if (!name.isEmpty()) {
-                    Context ctx = activity != null
-                            ? activity.getApplicationContext()
-                            : null;
-                    if (ctx != null) {
+        activity.runOnUiThread(() -> {
+            try {
+                StashNativeCard.KeepAliveConfig cfg = new StashNativeCard.KeepAliveConfig();
+                cfg.notificationTitle = notificationTitle != null ? notificationTitle : "";
+                cfg.notificationText = notificationText != null ? notificationText : "";
+                int iconResId = 0;
+                if (notificationIconDrawableName != null) {
+                    String name = notificationIconDrawableName.trim();
+                    if (!name.isEmpty()) {
+                        Context ctx = activity.getApplicationContext();
                         iconResId = ctx.getResources().getIdentifier(
                                 name, "drawable", ctx.getPackageName());
-                    }
-                    if (iconResId == 0) {
-                        Log.w(TAG, "Keep-alive notification icon drawable not found: "
-                                + name + " (add to Build/Android/res/drawable/)");
+                        if (iconResId == 0) {
+                            Log.w(TAG, "Keep-alive notification icon drawable not found: "
+                                    + name + " (add to Build/Android/res/drawable/)");
+                        }
                     }
                 }
+                cfg.notificationIconResId = iconResId;
+                StashNativeCard.getInstance().setKeepAliveConfig(cfg);
+            } catch (Exception e) {
+                Log.e(TAG, "Error setKeepAliveConfig: " + e.getMessage());
             }
-            cfg.notificationIconResId = iconResId;
-            StashNativeCard.getInstance().setKeepAliveConfig(cfg);
-        } catch (Exception e) {
-            Log.e(TAG, "Error setKeepAliveConfig: " + e.getMessage());
-        }
+        });
     }
 
     // ========================================================================
@@ -843,7 +899,8 @@ public class StashHelper {
         if (!isInitialized) {
             Initialize(activity);
         }
-        Log.d(TAG, "Opening browser: " + url);
+        // AND-14: log length only, not the token-bearing URL.
+        Log.d(TAG, "Opening browser urlLen=" + url.length());
         activity.runOnUiThread(() -> {
             try {
                 StashNativeCard.getInstance().openBrowser(url);

@@ -4,12 +4,12 @@
   <img src="https://github.com/stashgg/stash-native/raw/main/.github/assets/stash_unreal.png" width="128" height="128" alt="Stash Unreal Logo"/>
 </p>
 
-Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash-native), enabling Stash Pay IAP checkout and webshop presentation on Android and iOS via C++ and Blueprints. The plugin uses **Stash Native** (**2.2.3**).
+Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash-native), enabling Stash Pay IAP checkout and webshop presentation on Android and iOS via C++ and Blueprints. The plugin uses **Stash Native** (**2.2.4**).
 
 ## Requirements
 
 - Unreal Engine 5.0+ (sample project targets **5.7**)
-- iOS 12.0+ / Android API 21+
+- iOS 13.0+ / Android API 21+ (the bundled **StashNative.xcframework** declares `MinimumOSVersion` 13.0)
 - Xcode (iOS), Visual Studio (Windows/Android), Android SDK (Android)
 
 ## Sample / Downloads
@@ -51,7 +51,7 @@ Selecting a preset switches platform **behavior**, not just the frame:
 
 **Safe areas & device chrome:** the frame renders a bezel, status bar, notch / Dynamic Island / punch-hole, and home indicator / gesture bar per preset (toggle with **Show device chrome**). Layout respects insets like the native SDK: the bottom-drawer card's web content sits above the home indicator / gesture bar (sheet background fills the inset zone), card expand stops below the status bar, and centered sheets center within the safe area.
 
-**Keyboard simulation:** focusing an input field in the checkout page shows a platform-styled soft-keyboard mock (numeric fields get the number pad). The webview viewport shrinks like `visualViewport` / `adjustResize`, the focused field scrolls into view, bottom-drawer cards get covered by the keyboard (as on device) while centered modals shift up. Use the **Show/Hide keyboard** button to test without focusing a field.
+**Keyboard simulation:** focusing an input field in the checkout page shows a platform-styled soft-keyboard mock (numeric fields get the number pad). The webview viewport shrinks like `visualViewport` / `adjustResize`, the focused field scrolls into view, and the web *content* is inset above the keyboard so the focused field stays visible. A bottom-drawer card **auto-expands** to its max height when the keyboard shows (and collapses back when the keyboard hides, if the keyboard was what expanded it) so the field clears the keyboard, matching device behavior; centered modals shift up instead. Use the **Show/Hide keyboard** button to test without focusing a field.
 
 ### Usage
 
@@ -60,11 +60,11 @@ When **Enable Editor Preview** is on, calls to **Open Card**, **Open Modal**, an
 **Config-driven layout:** The preview reads `FStashCardConfig` / `FStashModalConfig` from each open call and applies native-aligned sizing:
 
 - **Card (phone):** bottom drawer — full width × `CardHeightRatioPortrait` in portrait; `CardWidthRatioLandscape` × `CardHeightRatioLandscape` in landscape.
-- **Card (tablet):** iPad / iPad Pro presets (or Custom when max dimension ≥ 768) use `TabletWidth/HeightRatio*` and a **centered** sheet, not a bottom drawer.
+- **Card (tablet):** iPad / iPad Pro presets (or Custom when its **larger** dimension ≥ 768 **and** its **smaller** dimension ≥ 600 — so a 390×800 phone-shaped custom device is not treated as a tablet) use `TabletWidth/HeightRatio*` and a **centered** sheet, not a bottom drawer.
 - **Card `bForcePortrait`:** portrait ratios even if the preview device is landscape; landscape toggle is disabled while the card is open.
 - **Modal:** phone or tablet ratio sets; always **centered** (both width and height from config — unlike card, phone modal is never full-bleed width). `bAllowDismiss` — tap the dim overlay to dismiss (unless purchase is processing).
 - **`BackgroundColor`:** visible as the rounded sheet shell behind the webview (drag handle on **card** only; modal is a centered dialog without the card swipe handle).
-- **`AndroidCheckoutBackdrop`:** rendered behind the dim overlay.
+- **`AndroidCheckoutBackdrop`:** rendered behind the dim overlay. Note: **Capture Viewport For Android Checkout Backdrop** returns **empty bytes on non-Android compiles** (Windows/macOS editor), so the in-editor preview shows no captured backdrop — verify the actual backdrop on an Android device.
 
 The **Active config** block in the preview controls panel shows which ratio fields are active, applied pixel size, flags, and shell color. Pick a device preset that matches the ratios you want to verify (e.g. **iPad Pro** + landscape toggle for tablet modal ratios; **iPhone** portrait uses `PhoneWidthRatioPortrait` × `PhoneHeightRatioPortrait`).
 
@@ -86,11 +86,11 @@ The **Active config** block in the preview controls panel shows which ratio fiel
 | Keep-alive APIs | Notification mock over the browser preview on Android presets |
 | Callbacks | Fired via injected `window.stash_sdk` JS bridge or **Simulate callbacks** buttons |
 
-**Force-portrait rotation (Android):** opening a `bForcePortrait` card while the preview device is landscape rotates the frame to portrait; without a backdrop set, a brief **white flash** is shown — the same flash real Android devices produce — with a tip pointing at **Capture Viewport For Android Checkout Backdrop**. The previous orientation is restored when the session ends.
+**Force-portrait rotation (Android):** opening a `bForcePortrait` card while the preview device is landscape rotates the frame to portrait; without a backdrop set, a brief **white flash** is shown — the same flash real Android devices produce — with a tip pointing at **Capture Viewport For Android Checkout Backdrop**. The previous orientation is restored when the session ends. (In the editor the capture node returns empty bytes on non-Android compiles, so the tip demonstrates the workflow rather than producing a live backdrop in-editor — the backdrop itself is only generated in an Android build.)
 
 **Mobile rendering & user-agent:** the checkout webview is driven with a **per-device mobile user-agent** (iOS Safari for iPhone/iPad presets, Android Chrome for Pixel/Galaxy — tablets drop the `Mobile` token) plus `sec-ch-ua-mobile` / `sec-ch-ua-platform` client hints, injected via a CEF request context. `navigator.userAgent` / `platform` / `vendor` / `maxTouchPoints` are also spoofed in-page for client-side platform checks. Switching device presets reloads the page so it re-fetches with the new platform identity. Combined with the mobile viewport and device-width sizing, the checkout renders its true iOS/Android layout and platform branding without a connected device.
 
-**CEF ceiling (important):** the preview runs on Chromium (CEF), **not** the phone's own webview (WebKit on iOS, Android System WebView). Responsive layout, sizing, safe areas, and UA-based branding match a real phone, but engine-exclusive features cannot be reproduced in-editor — most notably the **Apple Pay sheet** (needs WebKit's `window.ApplePaySession`) and pixel-exact Safari text rasterization. Verify those on a device.
+**CEF ceiling (important):** the preview runs on Chromium (CEF), **not** the phone's own webview (WebKit on iOS, Android System WebView). Responsive layout, sizing, safe areas, and UA-based branding match a real phone, but engine-exclusive features cannot be reproduced in-editor — most notably the **Apple Pay sheet** (needs WebKit's `window.ApplePaySession`) and pixel-exact Safari text rasterization. Verify those on a device. **Client-hints caveat (iOS presets):** because the preview is Chromium, it still sends `sec-ch-ua*` client hints for iOS presets (and the primary `sec-ch-ua` brand list advertises desktop Chromium) even though real Safari/WebKit never emits client hints — a checkout page that keys off client hints will see them in-editor but not on a real iOS device, so verify any client-hint-dependent branching on device.
 
 **Not simulated:** real payments, native Apple Pay / Google Pay sheets, Chrome Custom Tabs / Safari toolbar chrome, presentation animations, typing on the keyboard mock (text entry still uses your physical keyboard). Safe-area and keyboard-height values come from public device specs. Device builds are unchanged (`StashEditor` is editor-only).
 
@@ -216,6 +216,8 @@ Stash Native card on phone is designed for portrait. If your game is **landscape
 
 **Platform:** iOS only. No effect on Android.
 
+> **Verify on iOS 16/17 devices.** iOS 16 deprecated the older per-view rotation APIs in favor of `setNeedsUpdateOfSupportedInterfaceOrientations` / `requestGeometryUpdate`. The wrapper now drives rotation through the modern iOS 16+ path, and stash-native's `forcePortrait` rotates the whole window scene (not just an overlay view). The "game stays landscape, only the overlay rotates" behavior and the rotate-back-on-dismiss path should be confirmed on physical iOS 16 and 17 devices before you rely on them in production.
+
 ---
 
 ### Android keep-alive service (Android, Optional)
@@ -284,30 +286,25 @@ This is **intentional**: UE’s copied `GameActivity.java` and some engine/plugi
 
 #### Gradle dependencies and pins (`buildGradleAdditions`)
 
-The plugin also adds Maven dependencies required by **Stash Native** and keep-alive, including:
+The plugin adds only the Maven dependencies the **Stash Native** 2.2.4 AAR actually references (verified by scanning the AAR), plus the keep-alive Core pin:
 
 | Dependency | Purpose |
 |------------|---------|
 | `StashNative` AAR (`flatDir` / `libs/`) | Pre-built stash-native Android SDK |
-| `androidx.core:core:1.13.1` | `ServiceCompat.startForeground(…, int)` for keep-alive (see **Android keep-alive** above) |
-| `androidx.browser`, `androidx.webkit` | Required by stash-native |
-| `androidx.work:work-runtime` | WorkManager used by SDK / keep-alive paths |
-| `okhttp` 3.12.x, `guava`, Play `review` | Transitive / SDK-related pins |
+| `androidx.annotation:annotation` | AndroidX annotations |
+| `androidx.core:core:1.13.1` | Recent AndroidX Core for keep-alive foreground service / `NotificationCompat` (see **Android keep-alive** above; optional if you never enable keep-alive) |
+| `androidx.browser:browser`, `androidx.webkit:webkit` | Required by stash-native (Chrome Custom Tabs / checkout WebView) |
 | Kotlin `1.8.22` resolution | Avoids duplicate Kotlin stdlib classes when Core 1.13.x is pinned |
 
-See **Android keep-alive service** for which lines you can remove if you never enable keep-alive.
+The previous `okhttp` (3.12.x), `guava`, Google Play `review`, and `androidx.work:work-runtime` pins have been **removed** — a scan of the shipped 2.2.4 AAR finds zero references to any of them (and okhttp 3.12.x is EOL). See **Android keep-alive service** for which remaining lines you can remove if you never enable keep-alive.
 
 #### Manifest permissions & privacy review (`androidManifestUpdates`)
 
-The plugin UPL **merges or adjusts** these Android manifest permissions in your packaged APK. List them in privacy policies, Play **Data safety**, and App Store privacy questionnaires as applicable.
+The plugin UPL no longer adds or rewrites any Android manifest **permissions** — the previous `AD_ID` add and the `WRITE_EXTERNAL_STORAGE` / `READ_EXTERNAL_STORAGE` edits have been **removed** (none related to Stash Pay checkout; they were template leftovers that forced unnecessary Play **Data safety** declarations onto integrators). The only manifest edit the UPL still performs is a UE4 / ≤5.2 compatibility patch that sets `android:exported="true"` on the legacy `com.epicgames.ue4.SplashActivity` (a no-op on the UE5 engines this plugin targets).
 
-| Permission | UPL action | Why / notes |
-|------------|------------|-------------|
-| `com.google.android.gms.permission.AD_ID` | **Added** | Advertising ID access (Android 13+ declaration). Required for some analytics / attribution stacks bundled with payment or SDK dependencies. **Disclose** if you publish to Google Play. |
-| `android.permission.WRITE_EXTERNAL_STORAGE` | **Removed**, then re-added with `maxSdkVersion="32"` | Legacy scoped storage write; capped to API ≤ 32. |
-| `android.permission.READ_EXTERNAL_STORAGE` | **Added** with `minSdkVersion="33"` | Read storage on newer API levels where the legacy write permission no longer applies. |
+The permissions your APK actually needs come from the base UE manifest and the **StashNative** AAR merge:
 
-**Also expect (not always from this UPL alone):**
+**Expect (merged, not added by this UPL):**
 
 - **`INTERNET`** — required for Stash checkout / webshop URLs (typically from UE base manifest and/or **StashNative** AAR merge). Verify the merged manifest in `Intermediate/Android/…` or the built APK.
 - **Foreground service / notification permissions** — if you enable **Android keep-alive**, the **StashNative** AAR merges service entries and related permissions; audit the merged manifest when keep-alive is on.
@@ -320,36 +317,32 @@ To change permissions, edit **`androidManifestUpdates`** in **`Stash_UPL_Android
 
 | Artifact | Version (pinned in UPL) | Typical use |
 |----------|-------------------------|-------------|
-| `com.squareup.okhttp3:okhttp` | 3.12.13 | HTTP client (SDK / network) |
-| `com.squareup.okhttp3:okhttp-urlconnection` | 3.12.13 | OkHttp URL connection support |
-| `com.google.android.play:review` | 2.0.1 | Google Play In-App Review API |
-| `com.google.guava:guava` | 28.2-android | Guava utilities (SDK transitive pin) |
 | `androidx.annotation:annotation` | 1.0.0 | AndroidX annotations |
-| `androidx.core:core` | 1.13.1 | Core AndroidX (keep-alive `ServiceCompat`; optional — see keep-alive section) |
-| `androidx.work:work-runtime` | 2.7.1 | WorkManager |
-| `androidx.browser:browser` | 1.7.0 | Chrome Custom Tabs (in-app browser flows) |
-| `androidx.webkit:webkit` | 1.5.0 | WebView / checkout web content |
+| `androidx.core:core` | 1.13.1 | Recent AndroidX Core for keep-alive foreground service / `NotificationCompat` (optional — see keep-alive section) |
+| `androidx.browser:browser` | 1.7.0 | Chrome Custom Tabs (in-app browser flows); required by stash-native |
+| `androidx.webkit:webkit` | 1.5.0 | WebView / checkout web content; required by stash-native |
+
+The `okhttp` (×2), `com.google.android.play:review`, `com.google.guava:guava`, and `androidx.work:work-runtime` pins were **removed** — verified absent from the 2.2.4 AAR.
 
 **ProGuard / R8** rules appended by the plugin:
 
 | Rule | Keeps |
 |------|--------|
-| `com.Plugins.Stash.**` | Stash UE JNI bridge (`StashHelper`, `StashInit`) |
-| `com.stash.**` | Stash Native SDK classes |
-| `androidx.**` | AndroidX (dontwarn + keep) |
-| `com.facebook.**` | Facebook SDK classes referenced by stash-native / payment stack — **disclose** if your privacy review tracks Facebook/Meta SDK data collection |
+| `com.Plugins.**` | Stash UE JNI bridge (`StashHelper`, `StashInit`) |
+| `com.stash.**` | Stash Native SDK classes — full keep, **required by** `StashHelper.java`'s purchase-processing reflection into private SDK fields (only narrow it if that reflection is removed) |
+| `androidx.browser.**`, `androidx.webkit.**`, `androidx.core.app.**` | Only the AndroidX packages the SDK touches (narrowed from a blanket `androidx.**` keep to save APK size under R8) |
 
-`minifyEnabled` is set **false** for the app `release` build type in this UPL snippet; the keep rules still apply if you enable minification elsewhere.
+The dead `com.facebook.**` keep was **removed** (zero Facebook classes exist in the AAR). The UPL no longer overrides the host app's `minifyEnabled`; the keep rules above still apply if you enable minification in your project.
 
 #### Other UPL hooks (short)
 
 | Hook | Effect |
 |------|--------|
 | **`prebuildCopies`** | Copies `StashHelper.java` / `StashInit.java` into the Gradle tree |
-| **`gradleCopies`** | Copies `ThirdParty/Android/StashNative-*.aar` → `libs/StashNative.aar` |
-| **`proguardAdditions`** | Keeps `com.Plugins.Stash.**`, `com.stash.**`, `androidx.**`, `com.facebook.**` (see **Manifest permissions & privacy review** above) |
-| **`gameActivityOnStartAdditions`** | Patches `GameActivity` `registerReceiver` for Android 14+ (`RECEIVER_EXPORTED`) |
-| **`androidManifestUpdates`** | Permissions listed in **Manifest permissions & privacy review** above |
+| **`gradleCopies`** | Copies `ThirdParty/Android/StashNative-2.2.4.aar` → `libs/StashNative.aar` |
+| **`proguardAdditions`** | Keeps `com.Plugins.**`, `com.stash.**`, and the narrowed `androidx.browser/webkit/core.app` packages (see **Third-party libraries & ProGuard** above) |
+| **`gameActivityOnStartAdditions`** | **UE4 / ≤5.2 compat only.** Detects the legacy `registerReceiver(ACTION_RUN)` line and, only if present, patches it with `RECEIVER_EXPORTED` (Android 14+). On UE 5.3+ the target line is absent (the template already exports the receiver), so this **no-ops** and logs that it was skipped. |
+| **`androidManifestUpdates`** | No permission edits (removed). Only a **UE4 / ≤5.2 compat** patch that sets `android:exported="true"` on `com.epicgames.ue4.SplashActivity` — a no-op on the UE5 (`com.epicgames.unreal.*`) engines this plugin targets. |
 
 To inspect exact behavior, open **`Stash_UPL_Android.xml`** or enable **`STASH_UPL_VERBOSE`** during packaging (see **Debugging**).
 
@@ -416,6 +409,11 @@ UStashBlueprint::OnPaymentSuccess.AddDynamic(this, &AYourClass::OnStashPaymentSu
 | `SetAndroidKeepAliveConfig(Config)` | (Android) Notification title, text, and optional icon drawable name for keep-alive (`FStashKeepAliveConfig`) |
 | `GetStashSubsystem(WorldContextObject)` | Returns the Stash Subsystem so you can bind to On Payment Success, On Dialog Dismissed, etc. in Blueprint |
 | `MakeStashCardConfig(...)` | Builds `FStashCardConfig` for OpenCardWithConfig |
+| `MakeStashModalConfig(...)` | Builds `FStashModalConfig` for OpenModalWithConfig |
+| `SetAndroidCheckoutBackdropBytes(ImageBytes)` | (Android) Sets PNG/JPEG bytes shown behind the dim overlay during force-portrait checkout; call before Open Card. No-op on iOS/other |
+| `ClearAndroidCheckoutBackdrop()` | (Android) Clears a backdrop set via Set Android Checkout Backdrop Bytes |
+| `CaptureViewportForAndroidCheckoutBackdrop(WorldContext, OutImageBytes)` (Latent) | (Android) Latent node — captures the viewport end-of-frame to JPEG bytes on the **Completed** exec pin (preferred in Widget Blueprints) |
+| `CaptureViewportForAndroidCheckoutBackdrop(WorldContext, OnComplete)` (Delegate) | (Android) Delegate variant — returns JPEG bytes via `OnComplete` (empty array on failure or on non-Android builds) |
 
 ### Callback events (`UStashSubsystem` — recommended)
 
@@ -430,6 +428,8 @@ Bind via **Get Stash Subsystem** in Blueprint or **`UStashBlueprint::GetStashSub
 | `OnPageLoaded(LoadTimeMs)` | Page finished loading |
 | `OnNetworkError` | Network error during load |
 | `OnExternalPayment(URL)` | Checkout opened an external URL (e.g. Google Pay, Klarna, crypto); payment may complete in browser or another app; user returns via deep link |
+| `OnPurchaseProcessing` | A purchase started processing; the checkout UI cannot be dismissed while processing |
+| `OnProcessingCompleted` | Purchase processing finished (paired with `OnPurchaseProcessing`) |
 
 ### Legacy static delegates (`UStashBlueprint` — C++ only)
 
@@ -497,12 +497,12 @@ Unset the variable or close the terminal to return to quiet packaging logs. This
 - **Payment callback runs twice:** You bound both **Get Stash Subsystem** events and legacy **`UStashBlueprint::OnPaymentSuccess`** (or another static delegate). Use **one** path — subsystem only is recommended.
 - **Blueprint shows old nodes (Open Checkout, Set Force Web Based Checkout):** The plugin API is **Open Card**, **Open Card With Config**, **Open Browser**, **Close Browser**, **Is Card Open**, **Dismiss Card** (no Open Checkout, no Force Web Based). If you still see old names, do a **clean rebuild**: close the editor, delete the `Intermediate` and `Binaries` folders in your project root, then reopen the `.uproject`. The editor will recompile and Blueprint will show only the new Stash nodes.
 - **iOS – undefined symbol / Library not loaded:** Add WebKit and SafariServices if needed; ensure **StashNative.xcframework** is embedded (Embed & Sign) and present under `Plugins/Stash/Source/Stash/ThirdParty/iOS/`.
-- **Android – class not found / blank card:** Ensure **StashNative** AAR is in `ThirdParty/Android/` (e.g. `StashNative-2.2.1.aar`; the filename must match `Stash_UPL_Android.xml` → `gradleCopies`). Add internet permission. ProGuard: keep `com.stash.**`.
-- **Android – checkout backdrop has no effect:** Use a Stash Native Android AAR that includes `setBackdropBytes(byte[])` on `StashNativeCard` (2.1.4+ in this repo). Confirm call order: set bytes (or capture delegate) **before** Open Card. If you replace the AAR with another build, update the `gradleCopies` `copyFile` `src` path to that filename.
+- **Android – class not found / blank card:** Ensure **StashNative** AAR is in `ThirdParty/Android/` (this repo ships `StashNative-2.2.4.aar`; the filename must match `Stash_UPL_Android.xml` → `gradleCopies`). Add internet permission. ProGuard: keep `com.stash.**`.
+- **Android – checkout backdrop has no effect:** Use a Stash Native Android AAR that supports the checkout backdrop on `StashNativeCard` (this repo ships 2.2.4). Confirm call order: set bytes (or capture delegate) **before** Open Card. If you replace the AAR with another build, update the `gradleCopies` `copyFile` `src` path to that filename.
 - **Blueprint – "Only exactly matching structures" between Make Stash Card Config and Open Card With Config:** Usually a **stale graph** after the `FStashCardConfig` struct changed. **Close the editor**, rebuild the **Stash** plugin (or full project), reopen, then **delete** the **Make Stash Card Config** and **Open Card With Config** nodes and place them again from the **Stash** category (or use **Refresh All Nodes** on the Blueprint). Ensure you are not mixing a **User-defined struct** with the same display name as the plugin’s **Stash Card Config**; the shell color pin must be **String** (HTML hex like `#RRGGBB`), not Linear Color.
 - **Blueprint – Make Stash Keep Alive Config missing Notification Icon Drawable Name:** The C++ struct changed; the editor is still using old plugin bytecode. **Close the editor**, rebuild the **Stash** plugin, reopen, **delete** the old **Make Stash Keep Alive Config** node, and add a fresh one from the **Stash** category (right-click → Stash → **Make Stash Keep Alive Config**). Prefer that node over the generic struct **Make** pin on **Stash Keep Alive Config**.
 - **Android – `Assertion failed: Result` in `Stack.h`:** Stale **WBP_StashUI** (or your widget) bytecode still references a removed **Make Stash Card Config** pin (e.g. old **Use Android Checkout Backdrop**). Open the widget, **delete** the **Make Stash Card Config** node, place a new one, wire only **Android Checkout Backdrop** from capture → **Open Card With Config**, compile, save, then **recook** Android.
-- **Android – crash on Open Browser with keep-alive:** `NoSuchMethodError` on `ServiceCompat.startForeground(Service, int, Notification, int)` means **`androidx.core` is too old** in the packaged APK. Ensure `Stash_UPL_Android.xml` still includes **`implementation 'androidx.core:core:1.13.1'`** (or newer); see the **Android keep-alive service** section above.
+- **Android – crash on Open Browser with keep-alive:** A `NoSuchMethodError` / `NoClassDefFoundError` from the keep-alive foreground service usually means the packaged **`androidx.core`** is too old. Note the shipped 2.2.4 AAR calls `startForeground` directly and uses `NotificationCompat` (it does **not** reference `ServiceCompat.startForeground` — that story described an older AAR), so the pin is a defensive "recent Core" measure rather than a hard `ServiceCompat` requirement. Keep `Stash_UPL_Android.xml`'s **`implementation 'androidx.core:core:1.13.1'`** (or newer) if you use keep-alive; see the **Android keep-alive service** section above.
 - **Android – Gradle `checkDebugDuplicateClasses` (Kotlin):** Duplicate classes in `kotlin-stdlib` vs `kotlin-stdlib-jdk7` / `kotlin-stdlib-jdk8` usually means mixed Kotlin versions. The plugin’s UPL should force **`org.jetbrains.kotlin` to 1.8.22**; if you still see this after merging other Gradle snippets, align or exclude conflicting Kotlin artifacts.
 - **Xcode: "ExternalBuildToolExecution failed" / "never received target ended message":** The real error is from UnrealBuildTool. Check `~/Library/Application Support/Epic/UnrealBuildTool/Log.txt`. Clear Xcode caches: delete `~/Library/Developer/Xcode/DerivedData`, then regenerate project files and reopen. Alternatively, build from Unreal Editor (open the `.uproject`) or from the command line with the engine's `Build.sh` instead of Xcode.
 

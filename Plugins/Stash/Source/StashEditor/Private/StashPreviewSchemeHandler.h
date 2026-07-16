@@ -4,13 +4,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "IWebBrowserSchemeHandler.h"
-
-class FStashPreviewSchemeHandlerFactory : public IWebBrowserSchemeHandlerFactory
-{
-public:
-	virtual TUniquePtr<IWebBrowserSchemeHandler> Create(FString Verb, FString Url) override;
-};
 
 void RegisterStashPreviewSchemeHandler();
 void UnregisterStashPreviewSchemeHandler();

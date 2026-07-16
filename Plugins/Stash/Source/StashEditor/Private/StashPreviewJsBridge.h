@@ -21,6 +21,33 @@ namespace StashPreviewJsBridge
 		Escaped.ReplaceInline(TEXT("\""), TEXT("\\\""));
 		const TCHAR* Platform = bAndroid ? TEXT("Linux armv8l") : (bMobile ? TEXT("iPhone") : TEXT("iPad"));
 		const TCHAR* Vendor = bAndroid ? TEXT("Google Inc.") : TEXT("Apple Computer, Inc.");
+
+		// navigator.userAgentData is Chromium-only. On Android we spoof it (mobile/platform/brands) and
+		// forward getHighEntropyValues() as a resolved Promise, so pages that await it don't throw
+		// TypeError only in the preview. On iOS, WebKit exposes no userAgentData at all, so we remove it
+		// to match a real device rather than leaving a Chromium object behind.
+		FString UserAgentDataBlock;
+		if (bAndroid)
+		{
+			UserAgentDataBlock = FString::Printf(TEXT(
+				"    (function() {\n"
+				"      var brands = (navigator.userAgentData && navigator.userAgentData.brands) || [];\n"
+				"      var mobile = %s;\n"
+				"      var uaPlatform = 'Android';\n"
+				"      var high = { architecture: 'arm', bitness: '64', brands: brands, fullVersionList: brands, mobile: mobile, model: '', platform: uaPlatform, platformVersion: '', uaFullVersion: '', wow64: false };\n"
+				"      var spoof = { brands: brands, mobile: mobile, platform: uaPlatform,\n"
+				"        getHighEntropyValues: function() { return Promise.resolve(high); },\n"
+				"        toJSON: function() { return { brands: brands, mobile: mobile, platform: uaPlatform }; } };\n"
+				"      def(navigator, 'userAgentData', spoof);\n"
+				"    })();\n"),
+				bMobile ? TEXT("true") : TEXT("false"));
+		}
+		else
+		{
+			UserAgentDataBlock = TEXT(
+				"    try { Object.defineProperty(navigator, 'userAgentData', { get: function() { return undefined; }, configurable: true }); } catch (e) {}\n");
+		}
+
 		return FString::Printf(TEXT(R"JS(
 (function() {
   try {
@@ -33,9 +60,7 @@ namespace StashPreviewJsBridge
     def(navigator, 'platform', '%s');
     def(navigator, 'vendor', '%s');
     def(navigator, 'maxTouchPoints', %d);
-    if (navigator.userAgentData) {
-      def(navigator, 'userAgentData', { mobile: %s, platform: '%s', brands: navigator.userAgentData.brands || [] });
-    }
+%s
     if (!('ontouchstart' in window)) { window.ontouchstart = null; }
   } catch (e) {}
 })();
@@ -44,8 +69,7 @@ namespace StashPreviewJsBridge
 			Platform,
 			Vendor,
 			5,
-			bMobile ? TEXT("true") : TEXT("false"),
-			bAndroid ? TEXT("Android") : TEXT("iOS"));
+			*UserAgentDataBlock);
 	}
 
 	inline FString GetInjectionScript()
@@ -282,8 +306,9 @@ namespace StashPreviewJsBridge
   }
   ensureStashSdkBridge();
 
-  if (window.__stashUnrealPreviewInjected) { return; }
-  window.__stashUnrealPreviewInjected = true;
+  // Intentionally re-runnable: this script is (re-)injected on every page load and SPA navigation.
+  // Idempotence is handled per-feature above (the __stashUnrealPreview* guards inside each applier do
+  // the real work), so there is deliberately no single top-level "already injected" guard here.
 })();
 )JS");
 	}

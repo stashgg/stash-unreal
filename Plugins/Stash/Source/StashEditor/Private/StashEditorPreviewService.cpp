@@ -20,7 +20,7 @@ TSharedRef<FStashEditorPreviewService> FStashEditorPreviewService::Get()
 	return Instance;
 }
 
-bool FStashEditorPreviewService::CanUsePreview() const
+bool FStashEditorPreviewService::IsPreviewEnabled() const
 {
 	const UStashEditorSettings* Settings = GetDefault<UStashEditorSettings>();
 	if (!Settings || !Settings->bEnableEditorPreview)
@@ -28,25 +28,41 @@ bool FStashEditorPreviewService::CanUsePreview() const
 		return false;
 	}
 #if !STASH_HAS_WEBBROWSER
-	UE_LOG(LogStashEditor, Warning, TEXT("[StashPreview] Web Browser engine plugin is not installed in this Unreal build. Enable it under Edit → Plugins → Web Browser if available, then rebuild."));
+	static bool bWarnedNoWebBrowser = false;
+	if (!bWarnedNoWebBrowser)
+	{
+		bWarnedNoWebBrowser = true;
+		UE_LOG(LogStashEditor, Warning, TEXT("[StashPreview] Web Browser engine plugin is not installed in this Unreal build. Enable it under Edit → Plugins → Web Browser if available, then rebuild."));
+	}
 	return false;
 #else
-	if (!FModuleManager::Get().IsModuleLoaded(TEXT("WebBrowser")))
+	if (!FModuleManager::Get().IsModuleLoaded(TEXT("WebBrowser")) && !FModuleManager::Get().ModuleExists(TEXT("WebBrowser")))
 	{
-		if (!FModuleManager::Get().ModuleExists(TEXT("WebBrowser")))
+		static bool bWarnedNoModule = false;
+		if (!bWarnedNoModule)
 		{
+			bWarnedNoModule = true;
 			UE_LOG(LogStashEditor, Warning, TEXT("[StashPreview] WebBrowser module not found. Enable Edit → Plugins → Web Browser and restart the editor."));
-			return false;
 		}
-		FModuleManager::Get().LoadModule(TEXT("WebBrowser"));
+		return false;
 	}
 	return true;
 #endif
 }
 
+void FStashEditorPreviewService::EnsureWebBrowserLoaded()
+{
+#if STASH_HAS_WEBBROWSER
+	if (!FModuleManager::Get().IsModuleLoaded(TEXT("WebBrowser")) && FModuleManager::Get().ModuleExists(TEXT("WebBrowser")))
+	{
+		FModuleManager::Get().LoadModule(TEXT("WebBrowser"));
+	}
+#endif
+}
+
 bool FStashEditorPreviewService::IsAvailable() const
 {
-	return CanUsePreview();
+	return IsPreviewEnabled();
 }
 
 FString FStashEditorPreviewService::NormalizeUrl(const FString& URL) const
@@ -64,10 +80,11 @@ FString FStashEditorPreviewService::NormalizeUrl(const FString& URL) const
 
 bool FStashEditorPreviewService::PrepareSession(const FString& URL, EStashPreviewPresentationMode Mode)
 {
-	if (!CanUsePreview())
+	if (!IsPreviewEnabled())
 	{
 		return false;
 	}
+	EnsureWebBrowserLoaded();
 	const FString Normalized = NormalizeUrl(URL);
 	if (Normalized.IsEmpty())
 	{
@@ -84,8 +101,7 @@ bool FStashEditorPreviewService::PrepareSession(const FString& URL, EStashPrevie
 	Session.PresentationMode = Mode;
 	Session.LoadStartSeconds = FApp::GetCurrentTime();
 	Session.bPageLoadedFired = false;
-	LastPreviewCallbackDedupKey.Reset();
-	LastPreviewCallbackTime = -1.0;
+	ResetCallbackDedup();
 	return true;
 }
 
@@ -157,15 +173,36 @@ void FStashEditorPreviewService::EndSession(bool bFireDismiss)
 	Session.bIsPurchaseProcessing = false;
 	Session.bKeyboardVisible = false;
 	Session.KeyboardInputType.Reset();
+	ResetCallbackDedup();
 	RefreshAllPanels();
 	if (bFireDismiss)
 	{
 		UStashBlueprint::HandleDialogDismissed();
 	}
+	// Deferred on purpose: the game-thread task queue is FIFO, so the broadcast tasks that the Handle*
+	// callbacks (HandleDialogDismissed / HandlePaymentSuccess / …) enqueue run before this one and still
+	// see the pinned preview world. Collapsing this to a direct call would clear the world first and make
+	// late callbacks resolve against whatever world the fallback finds.
 	AsyncTask(ENamedThreads::GameThread, []()
 	{
 		UStashBlueprint::ClearEditorPreviewCallbackWorld();
 	});
+}
+
+void FStashEditorPreviewService::ResetTransientSessionState()
+{
+	Session.bIsPurchaseProcessing = false;
+	Session.bKeyboardVisible = false;
+	Session.KeyboardInputType.Reset();
+	ResetCallbackDedup();
+	RefreshAllPanels();
+}
+
+void FStashEditorPreviewService::ResetCallbackDedup()
+{
+	LastPreviewCallbackDedupKey.Reset();
+	LastPreviewCallbackTime = -1.0;
+	DispatchedTerminalKeys.Reset();
 }
 
 bool FStashEditorPreviewService::CloseBrowser()
@@ -186,7 +223,9 @@ bool FStashEditorPreviewService::CloseBrowser()
 
 bool FStashEditorPreviewService::DismissCard()
 {
-	if (!Session.bIsOpen)
+	// Device parity: openBrowser launches Custom Tabs / SFSafariViewController, which the native
+	// card-state / dismiss API does not act on. A full-bleed Browser session is not a dismissable card.
+	if (!Session.bIsOpen || Session.PresentationMode == EStashPreviewPresentationMode::Browser)
 	{
 		return false;
 	}
@@ -201,7 +240,9 @@ bool FStashEditorPreviewService::DismissCard()
 
 bool FStashEditorPreviewService::IsCardOpen() const
 {
-	return Session.bIsOpen;
+	// Device parity: a Browser session (Custom Tabs / Safari VC on device) is not reflected by the
+	// native card-state query, so game logic branching on IsCardOpen behaves the same in preview and on hardware.
+	return Session.bIsOpen && Session.PresentationMode != EStashPreviewPresentationMode::Browser;
 }
 
 bool FStashEditorPreviewService::IsPurchaseProcessing() const
@@ -333,6 +374,17 @@ void FStashEditorPreviewService::EnsurePreviewTabOpen()
 	}
 }
 
+namespace
+{
+	bool IsTerminalCallbackPath(const FString& Path)
+	{
+		return Path == TEXT("paymentSuccess")
+			|| Path == TEXT("paymentFailure")
+			|| Path == TEXT("optin")
+			|| Path == TEXT("externalBrowser");
+	}
+}
+
 bool FStashEditorPreviewService::DispatchPreviewCallbackUrl(const FString& Url)
 {
 	FString Path;
@@ -343,31 +395,49 @@ bool FStashEditorPreviewService::DispatchPreviewCallbackUrl(const FString& Url)
 	}
 
 	const FString DedupKey = StashPreviewCallbackUrl::BuildDedupKey(Path, Query);
-	const double Now = FApp::GetCurrentTime();
-	if (DedupKey == LastPreviewCallbackDedupKey
-		&& LastPreviewCallbackTime >= 0.0
-		&& (Now - LastPreviewCallbackTime) < PreviewCallbackDedupSeconds)
+	if (IsTerminalCallbackPath(Path))
 	{
-		return false;
+		// Terminal callbacks fire at most once per session, no matter how many channels
+		// (console message, navigation intercept, CEF scheme handler) deliver them or how far apart —
+		// an editor hitch longer than the rolling window must never double-fire OnPaymentSuccess.
+		if (DispatchedTerminalKeys.Contains(DedupKey))
+		{
+			return false;
+		}
+		DispatchedTerminalKeys.Add(DedupKey);
 	}
-	LastPreviewCallbackDedupKey = DedupKey;
-	LastPreviewCallbackTime = Now;
+	else
+	{
+		// Non-terminal (repeatable) callbacks keep the short rolling-time window so the same key
+		// arriving on multiple channels within a frame or two collapses to one dispatch.
+		const double Now = FApp::GetCurrentTime();
+		if (DedupKey == LastPreviewCallbackDedupKey
+			&& LastPreviewCallbackTime >= 0.0
+			&& (Now - LastPreviewCallbackTime) < PreviewCallbackDedupSeconds)
+		{
+			return false;
+		}
+		LastPreviewCallbackDedupKey = DedupKey;
+		LastPreviewCallbackTime = Now;
+	}
 
 	const FString CanonicalUrl = StashPreviewCallbackUrl::BuildPreviewCallbackUrl(Path, Query);
 	UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback URL: %s"), *CanonicalUrl);
-	NotifyUrlChanged(CanonicalUrl);
+	HandleCallback(Path, Query);
 	return true;
 }
 
-void FStashEditorPreviewService::NotifyUrlChanged(const FString& Url)
+void FStashEditorPreviewService::FinishProcessingIfActive()
 {
-	FString Path;
-	FString Query;
-	if (!StashPreviewCallbackUrl::ParsePreviewCallbackUrl(Url, Path, Query))
+	if (Session.bIsPurchaseProcessing)
 	{
-		return;
+		Session.bIsPurchaseProcessing = false;
+		UStashBlueprint::HandleProcessingCompleted();
 	}
+}
 
+void FStashEditorPreviewService::HandleCallback(const FString& Path, const FString& Query)
+{
 	auto ParseQueryParam = [&Query](const TCHAR* Key) -> FString
 	{
 		if (Query.IsEmpty())
@@ -389,33 +459,27 @@ void FStashEditorPreviewService::NotifyUrlChanged(const FString& Url)
 		return FString();
 	};
 
+	// Terminal callbacks are gated on an open session: Simulate buttons (and late/duplicate channel
+	// deliveries) must not broadcast payment events into game code when nothing is open.
 	if (Path == TEXT("paymentSuccess"))
 	{
+		if (!Session.bIsOpen)
+		{
+			return;
+		}
 		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: paymentSuccess"));
-		if (Session.bIsPurchaseProcessing)
-		{
-			Session.bIsPurchaseProcessing = false;
-			UStashBlueprint::HandleProcessingCompleted();
-		}
-		else
-		{
-			Session.bIsPurchaseProcessing = false;
-		}
+		FinishProcessingIfActive();
 		UStashBlueprint::HandlePaymentSuccess();
 		EndSession(false);
 	}
 	else if (Path == TEXT("paymentFailure"))
 	{
+		if (!Session.bIsOpen)
+		{
+			return;
+		}
 		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: paymentFailure"));
-		if (Session.bIsPurchaseProcessing)
-		{
-			Session.bIsPurchaseProcessing = false;
-			UStashBlueprint::HandleProcessingCompleted();
-		}
-		else
-		{
-			Session.bIsPurchaseProcessing = false;
-		}
+		FinishProcessingIfActive();
 		UStashBlueprint::HandlePaymentFailure();
 		EndSession(false);
 	}
@@ -428,6 +492,10 @@ void FStashEditorPreviewService::NotifyUrlChanged(const FString& Url)
 	}
 	else if (Path == TEXT("optin"))
 	{
+		if (!Session.bIsOpen)
+		{
+			return;
+		}
 		const FString OptInType = ParseQueryParam(TEXT("type"));
 		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: optin (type=%s)"), *OptInType);
 		UStashBlueprint::HandleOptInResponse(OptInType);
@@ -435,6 +503,10 @@ void FStashEditorPreviewService::NotifyUrlChanged(const FString& Url)
 	}
 	else if (Path == TEXT("externalBrowser"))
 	{
+		if (!Session.bIsOpen)
+		{
+			return;
+		}
 		const FString ExternalUrl = ParseQueryParam(TEXT("url"));
 		UE_LOG(LogStashEditor, Log, TEXT("[StashPreview] Callback: externalBrowser (url=%s)"), *ExternalUrl);
 		UStashBlueprint::HandleExternalPayment(ExternalUrl);

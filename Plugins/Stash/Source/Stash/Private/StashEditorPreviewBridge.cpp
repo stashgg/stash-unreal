@@ -24,21 +24,23 @@ void FStashEditorPreviewBridge::Unregister()
 #endif
 }
 
-IStashEditorPreviewBridge* FStashEditorPreviewBridge::GetBridge()
+// Contract for the whole forwarder: all Try* calls must run on the game thread — the bridge drives
+// Slate/WebBrowser widgets. IsAvailable() means "a new preview session can be opened right now"
+// (it gates the three Open* entry points); state queries, setters, Close/Dismiss are always allowed.
+// GetBridge() returns a pinned TSharedPtr so the implementation stays alive for the duration of the call.
+TSharedPtr<IStashEditorPreviewBridge> FStashEditorPreviewBridge::GetBridge()
 {
 #if WITH_EDITOR
-	if (TSharedPtr<IStashEditorPreviewBridge> Pinned = GStashEditorPreviewBridge.Pin())
-	{
-		return Pinned.Get();
-	}
-#endif
+	return GStashEditorPreviewBridge.Pin();
+#else
 	return nullptr;
+#endif
 }
 
 bool FStashEditorPreviewBridge::TryOpenCard(const FString& URL, const FStashCardConfig& Config)
 {
 #if WITH_EDITOR
-	if (IStashEditorPreviewBridge* Bridge = GetBridge())
+	if (TSharedPtr<IStashEditorPreviewBridge> Bridge = GetBridge())
 	{
 		if (Bridge->IsAvailable())
 		{
@@ -52,7 +54,7 @@ bool FStashEditorPreviewBridge::TryOpenCard(const FString& URL, const FStashCard
 bool FStashEditorPreviewBridge::TryOpenModal(const FString& URL, const FStashModalConfig& Config)
 {
 #if WITH_EDITOR
-	if (IStashEditorPreviewBridge* Bridge = GetBridge())
+	if (TSharedPtr<IStashEditorPreviewBridge> Bridge = GetBridge())
 	{
 		if (Bridge->IsAvailable())
 		{
@@ -66,7 +68,7 @@ bool FStashEditorPreviewBridge::TryOpenModal(const FString& URL, const FStashMod
 bool FStashEditorPreviewBridge::TryOpenBrowser(const FString& URL)
 {
 #if WITH_EDITOR
-	if (IStashEditorPreviewBridge* Bridge = GetBridge())
+	if (TSharedPtr<IStashEditorPreviewBridge> Bridge = GetBridge())
 	{
 		if (Bridge->IsAvailable())
 		{
@@ -80,7 +82,7 @@ bool FStashEditorPreviewBridge::TryOpenBrowser(const FString& URL)
 bool FStashEditorPreviewBridge::TryCloseBrowser()
 {
 #if WITH_EDITOR
-	if (IStashEditorPreviewBridge* Bridge = GetBridge())
+	if (TSharedPtr<IStashEditorPreviewBridge> Bridge = GetBridge())
 	{
 		return Bridge->CloseBrowser();
 	}
@@ -91,7 +93,7 @@ bool FStashEditorPreviewBridge::TryCloseBrowser()
 bool FStashEditorPreviewBridge::TryDismissCard()
 {
 #if WITH_EDITOR
-	if (IStashEditorPreviewBridge* Bridge = GetBridge())
+	if (TSharedPtr<IStashEditorPreviewBridge> Bridge = GetBridge())
 	{
 		return Bridge->DismissCard();
 	}
@@ -102,7 +104,7 @@ bool FStashEditorPreviewBridge::TryDismissCard()
 bool FStashEditorPreviewBridge::TryIsCardOpen()
 {
 #if WITH_EDITOR
-	if (IStashEditorPreviewBridge* Bridge = GetBridge())
+	if (TSharedPtr<IStashEditorPreviewBridge> Bridge = GetBridge())
 	{
 		return Bridge->IsCardOpen();
 	}
@@ -113,7 +115,7 @@ bool FStashEditorPreviewBridge::TryIsCardOpen()
 bool FStashEditorPreviewBridge::TryIsPurchaseProcessing()
 {
 #if WITH_EDITOR
-	if (IStashEditorPreviewBridge* Bridge = GetBridge())
+	if (TSharedPtr<IStashEditorPreviewBridge> Bridge = GetBridge())
 	{
 		return Bridge->IsPurchaseProcessing();
 	}
@@ -124,7 +126,7 @@ bool FStashEditorPreviewBridge::TryIsPurchaseProcessing()
 void FStashEditorPreviewBridge::TrySetLandscapeLockWhenCardClosed(bool bEnable)
 {
 #if WITH_EDITOR
-	if (IStashEditorPreviewBridge* Bridge = GetBridge())
+	if (TSharedPtr<IStashEditorPreviewBridge> Bridge = GetBridge())
 	{
 		Bridge->SetLandscapeLockWhenCardClosed(bEnable);
 	}
@@ -134,7 +136,7 @@ void FStashEditorPreviewBridge::TrySetLandscapeLockWhenCardClosed(bool bEnable)
 void FStashEditorPreviewBridge::TrySetAndroidKeepAliveEnabled(bool bEnabled)
 {
 #if WITH_EDITOR
-	if (IStashEditorPreviewBridge* Bridge = GetBridge())
+	if (TSharedPtr<IStashEditorPreviewBridge> Bridge = GetBridge())
 	{
 		Bridge->SetAndroidKeepAliveEnabled(bEnabled);
 	}
@@ -144,7 +146,7 @@ void FStashEditorPreviewBridge::TrySetAndroidKeepAliveEnabled(bool bEnabled)
 void FStashEditorPreviewBridge::TrySetAndroidKeepAliveConfig(const FStashKeepAliveConfig& Config)
 {
 #if WITH_EDITOR
-	if (IStashEditorPreviewBridge* Bridge = GetBridge())
+	if (TSharedPtr<IStashEditorPreviewBridge> Bridge = GetBridge())
 	{
 		Bridge->SetAndroidKeepAliveConfig(Config);
 	}
@@ -154,7 +156,7 @@ void FStashEditorPreviewBridge::TrySetAndroidKeepAliveConfig(const FStashKeepAli
 void FStashEditorPreviewBridge::TrySetAndroidCheckoutBackdropBytes(const TArray<uint8>& ImageBytes)
 {
 #if WITH_EDITOR
-	if (IStashEditorPreviewBridge* Bridge = GetBridge())
+	if (TSharedPtr<IStashEditorPreviewBridge> Bridge = GetBridge())
 	{
 		Bridge->SetAndroidCheckoutBackdropBytes(ImageBytes);
 	}
@@ -164,7 +166,7 @@ void FStashEditorPreviewBridge::TrySetAndroidCheckoutBackdropBytes(const TArray<
 void FStashEditorPreviewBridge::TryClearAndroidCheckoutBackdrop()
 {
 #if WITH_EDITOR
-	if (IStashEditorPreviewBridge* Bridge = GetBridge())
+	if (TSharedPtr<IStashEditorPreviewBridge> Bridge = GetBridge())
 	{
 		Bridge->ClearAndroidCheckoutBackdrop();
 	}

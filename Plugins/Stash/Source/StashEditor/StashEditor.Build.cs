@@ -38,11 +38,11 @@ public class StashEditor : ModuleRules
 		if (File.Exists(WebBrowserModule) || File.Exists(WebBrowserPlugin))
 		{
 			PrivateDependencyModuleNames.Add("WebBrowser");
-			PublicDefinitions.Add("STASH_HAS_WEBBROWSER=1");
+			PrivateDefinitions.Add("STASH_HAS_WEBBROWSER=1");
 		}
 		else
 		{
-			PublicDefinitions.Add("STASH_HAS_WEBBROWSER=0");
+			PrivateDefinitions.Add("STASH_HAS_WEBBROWSER=0");
 		}
 	}
 }

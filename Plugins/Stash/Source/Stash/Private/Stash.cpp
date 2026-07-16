@@ -10,8 +10,6 @@
 // Define the log category declared in Stash.h
 DEFINE_LOG_CATEGORY(LogStash);
 
-#define LOCTEXT_NAMESPACE "StashModule"
-
 void FStashModule::StartupModule()
 {
 	Initialize();
@@ -45,7 +43,5 @@ bool FStashModule::IsSupported()
 	return false;
 #endif
 }
-
-#undef LOCTEXT_NAMESPACE
 
 IMPLEMENT_MODULE(FStashModule, Stash)

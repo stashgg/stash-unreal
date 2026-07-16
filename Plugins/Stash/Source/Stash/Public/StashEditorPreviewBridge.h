@@ -59,5 +59,7 @@ public:
 	static void TryClearAndroidCheckoutBackdrop();
 
 private:
-	static IStashEditorPreviewBridge* GetBridge();
+	// Returns the registered bridge pinned to a strong ref, or null. Callers must keep the
+	// returned TSharedPtr alive for the whole call so the bridge can't be destroyed mid-use.
+	static TSharedPtr<IStashEditorPreviewBridge> GetBridge();
 };

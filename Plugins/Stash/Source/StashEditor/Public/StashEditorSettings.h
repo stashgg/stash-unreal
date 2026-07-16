@@ -7,14 +7,16 @@
 #include "StashEditorSettings.generated.h"
 
 /** Mobile platform the preview device emulates (drives back button, Close Browser semantics, keep-alive, chrome styling). */
-UENUM(BlueprintType)
+/** Editor-only: not BlueprintType — exposing an Editor-module enum to game Blueprints breaks cook/load in packaged builds. */
+UENUM()
 enum class EStashPreviewPlatform : uint8
 {
 	iOS     UMETA(DisplayName = "iOS"),
 	Android UMETA(DisplayName = "Android")
 };
 
-UENUM(BlueprintType)
+/** Editor-only: not BlueprintType (see EStashPreviewPlatform). */
+UENUM()
 enum class EStashPreviewDevicePreset : uint8
 {
 	iPhoneSE       UMETA(DisplayName = "iPhone SE (375x667)"),
@@ -67,16 +69,14 @@ public:
 	EStashPreviewDevicePreset DefaultDevicePreset = EStashPreviewDevicePreset::iPhone14;
 
 	/** Platform the Custom device emulates. */
-	UPROPERTY(Config, EditAnywhere, Category = "Editor Preview", meta = (EditCondition = "DefaultDevicePreset == EStashPreviewDevicePreset::Custom"))
+	UPROPERTY(Config, EditAnywhere, Category = "Editor Preview")
 	EStashPreviewPlatform CustomDevicePlatform = EStashPreviewPlatform::iOS;
 
-	/** Custom device width when Default Device Preset is Custom. */
-	UPROPERTY(Config, EditAnywhere, Category = "Editor Preview", meta = (EditCondition = "DefaultDevicePreset == EStashPreviewDevicePreset::Custom", ClampMin = "200", ClampMax = "2048"))
+	/** Custom device width, used when the preview panel selects the Custom preset. */
+	UPROPERTY(Config, EditAnywhere, Category = "Editor Preview", meta = (ClampMin = "200", ClampMax = "2048"))
 	float CustomDeviceWidth = 390.f;
 
-	/** Custom device height when Default Device Preset is Custom. */
-	UPROPERTY(Config, EditAnywhere, Category = "Editor Preview", meta = (EditCondition = "DefaultDevicePreset == EStashPreviewDevicePreset::Custom", ClampMin = "200", ClampMax = "2048"))
+	/** Custom device height, used when the preview panel selects the Custom preset. */
+	UPROPERTY(Config, EditAnywhere, Category = "Editor Preview", meta = (ClampMin = "200", ClampMax = "2048"))
 	float CustomDeviceHeight = 844.f;
-
-	virtual FName GetCategoryName() const override { return FName(TEXT("Plugins")); }
 };

@@ -70,7 +70,11 @@ FReply SStashPreviewDraggableSheet::OnMouseMove(const FGeometry& MyGeometry, con
 {
 	if (bDragging && HasMouseCapture())
 	{
-		const float DeltaY = MouseEvent.GetCursorDelta().Y;
+		// GetCursorDelta() is in screen-space (desktop) pixels; divide by the geometry scale so deltas —
+		// and the expand/dismiss thresholds they're compared against — are in local Slate units. This stays
+		// correct under DPI scale and is immune to the drawer re-anchoring as its height changes (unlike an
+		// AbsoluteToLocal-of-screen-position approach, which would drift when the sheet grows upward).
+		const float DeltaY = MouseEvent.GetCursorDelta().Y / FMath::Max(MyGeometry.Scale, KINDA_SMALL_NUMBER);
 		DragTotalDeltaY += DeltaY;
 
 		if (bEnableExpandDrag.Get(false))
@@ -104,7 +108,9 @@ FReply SStashPreviewDraggableSheet::OnMouseMove(const FGeometry& MyGeometry, con
 
 FReply SStashPreviewDraggableSheet::OnMouseButtonUp(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
 {
-	if (bDragging && MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	// Gate on HasMouseCapture(): a left-up routed here without an active capture (e.g. after capture was
+	// lost to window deactivation) must not evaluate the dismiss branch with stale drag state.
+	if (bDragging && HasMouseCapture() && MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		bDragging = false;
 		const float SheetH = SheetHeight.Get(0.f);
@@ -124,6 +130,18 @@ FReply SStashPreviewDraggableSheet::OnMouseButtonUp(const FGeometry& MyGeometry,
 		return FReply::Handled().ReleaseMouseCapture();
 	}
 	return FReply::Unhandled();
+}
+
+void SStashPreviewDraggableSheet::OnMouseCaptureLost(const FCaptureLostEvent& CaptureLostEvent)
+{
+	// Capture can vanish without a routed left-up (window deactivation, PIE focus change). Drop the drag
+	// so the sheet doesn't render permanently translated and a later left-up can't spuriously dismiss it.
+	if (bDragging || !FMath::IsNearlyZero(DragOffsetY))
+	{
+		ResetDrag();
+		Invalidate(EInvalidateWidget::PaintAndVolatility);
+	}
+	SCompoundWidget::OnMouseCaptureLost(CaptureLostEvent);
 }
 
 void SStashPreviewDraggableSheet::ResetDrag()

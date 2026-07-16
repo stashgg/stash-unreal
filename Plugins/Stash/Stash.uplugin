@@ -26,5 +26,13 @@
 			"Type": "Editor",
 			"LoadingPhase": "Default"
 		}
+	],
+	"Plugins": [
+		{
+			"Name": "WebBrowser",
+			"Enabled": true,
+			"Optional": true,
+			"TargetAllowList": [ "Editor" ]
+		}
 	]
 }

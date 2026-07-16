@@ -23,6 +23,8 @@ public:
 	SLATE_BEGIN_ARGS(SStashPreviewPanel) {}
 	SLATE_END_ARGS()
 
+	virtual ~SStashPreviewPanel() override;
+
 	void Construct(const FArguments& InArgs);
 	void RefreshFromSession();
 	void SetCardSheetExpanded(bool bExpanded);
@@ -36,6 +38,8 @@ private:
 	static constexpr float CardMaxExpandHeightRatio = 0.9f;
 	static constexpr float DeviceBezelThickness = 12.f;
 	static constexpr float BackdropFlashSeconds = 0.25f;
+	/** How long a load may run before we surface a load error if OnLoadCompleted never fires. */
+	static constexpr float LoadTimeoutSeconds = 5.f;
 
 	FReply OnReloadClicked();
 	FReply OnDismissClicked();
@@ -55,11 +59,16 @@ private:
 	void OnDevicePresetChanged(TSharedPtr<FString> NewSelection, ESelectInfo::Type SelectInfo);
 	void HandleUrlChanged(const FText& InText);
 	bool HandleBeforePreviewNavigation(const FString& Url, const FWebNavigationRequest& Request);
-	void HandlePreviewSchemeNavigation(const FString& Url);
+	/** @param bRestoreAfterBlank true only for the OnLoadUrl scheme-handler path, which blanks the webview. */
+	void HandlePreviewSchemeNavigation(const FString& Url, bool bRestoreAfterBlank = false);
 	bool HandlePreviewLoadUrl(const FString& Method, const FString& Url, FString& OutResponse);
 	void HandlePreviewConsoleMessage(const FString& Message, const FString& Source, int32 Line, EWebBrowserConsoleLogSeverity Severity);
 	void HandleLoadCompleted();
 	void InjectStashSdkScript();
+	/** Reset the load-progress flags and arm the load-failure timer for a load that is about to start. */
+	void ArmLoadTimer();
+	/** Reset load-progress flags, arm the load-failure timer, and (re)load Url in the existing browser. */
+	void StartLoad(const FString& Url);
 	/** Push the selected device's mobile-emulation params (UA / mobile flag / platform) to the service; optionally reload. */
 	void PushDeviceEmulation(bool bReload);
 	void EnsureBrowserForUrl(const FString& Url);
@@ -128,6 +137,9 @@ private:
 	FStashPreviewDeviceSpec CachedDeviceSpec;
 	/** Last platform pushed to the preview service; used to detect Custom-platform edits made in Project Settings. */
 	EStashPreviewPlatform LastSyncedActivePlatform = EStashPreviewPlatform::iOS;
+	/** Last user-agent THIS panel pushed to the service; compared against the panel's own spec (not the
+	 *  service-global UA) so multiple panels can't ping-pong reloads against each other. */
+	FString LastPushedUserAgent;
 	bool bDeviceLandscape = false;
 	/** Landscape state to restore when a force-portrait session ends. */
 	bool bRestoreLandscapeAfterSession = false;
@@ -150,12 +162,6 @@ private:
 	TSharedPtr<FSlateRoundedBoxBrush> BezelBrush;
 	TSharedPtr<FSlateRoundedBoxBrush> NotchBrush;
 	TSharedPtr<FSlateRoundedBoxBrush> NotchBrushLandscape;
-	// Vestigial: screen-corner masks were removed (Slate can't cheaply paint a concave corner sliver);
-	// kept declared to avoid a header/class-layout change. Safe to delete on the next full rebuild.
-	TSharedPtr<FSlateRoundedBoxBrush> ScreenCornerTL;
-	TSharedPtr<FSlateRoundedBoxBrush> ScreenCornerTR;
-	TSharedPtr<FSlateRoundedBoxBrush> ScreenCornerBL;
-	TSharedPtr<FSlateRoundedBoxBrush> ScreenCornerBR;
 	TSharedPtr<FSlateRoundedBoxBrush> HomeIndicatorBrush;
 	TSharedPtr<FSlateRoundedBoxBrush> KeepAliveBrush;
 	TSharedPtr<FSlateRoundedBoxBrush> KeepAliveIconBrush;

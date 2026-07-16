@@ -6,7 +6,9 @@ namespace
 {
 	float ClampRatio(float Ratio)
 	{
-		return FMath::Clamp(Ratio, 0.1f, 1.0f);
+		// StashRatioMin/Max come from the runtime module (StashBlueprint.h) so the preview clamps
+		// to the same range as the device — one source of truth for the SDK's accepted range.
+		return FMath::Clamp(Ratio, StashRatioMin, StashRatioMax);
 	}
 
 	bool UsePortraitLayout(bool bDeviceLandscape, bool bForcePortrait)

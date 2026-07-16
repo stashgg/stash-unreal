@@ -8,13 +8,11 @@
 #include "Stash.h"
 #include "StashAndroidBackdropCapture.h"
 
+#include "Engine/Engine.h"
+#include "Engine/World.h"
+
 #if WITH_EDITOR
 #include "StashEditorPreviewBridge.h"
-#include "Engine/Engine.h"
-#include "Engine/World.h"
-#else
-#include "Engine/Engine.h"
-#include "Engine/World.h"
 #endif
 
 #if PLATFORM_ANDROID
@@ -30,11 +28,24 @@ namespace
 #if WITH_EDITOR
 	UWorld* ResolveEditorPreviewCallbackWorld()
 	{
-		if (GWorld)
+		// Pin a game world only. GWorld is the editor world when opened outside PIE tick
+		// (editor utility widget, console command); pinning it would leave callbacks with a
+		// null GameInstance and silently kill preview events for the session.
+		if (GEngine)
 		{
-			return GWorld;
+			if (UWorld* PlayWorld = GEngine->GetCurrentPlayWorld())
+			{
+				return PlayWorld;
+			}
+			for (const FWorldContext& Ctx : GEngine->GetWorldContexts())
+			{
+				if (Ctx.World() && Ctx.WorldType == EWorldType::PIE)
+				{
+					return Ctx.World();
+				}
+			}
 		}
-		return GEngine ? GEngine->GetCurrentPlayWorld() : nullptr;
+		return (GWorld && GWorld->IsGameWorld()) ? GWorld : nullptr;
 	}
 
 	bool TryEditorPreview(TFunctionRef<bool()> OpenFn)
@@ -49,11 +60,9 @@ namespace
 	}
 #endif
 
-	constexpr float StashRatioMin = 0.1f;
-	constexpr float StashRatioMax = 1.0f;
-
 	float ClampStashRatio(float Ratio)
 	{
+		// StashRatioMin/Max are exported from StashBlueprint.h so the editor preview clamps identically.
 		return FMath::Clamp(Ratio, StashRatioMin, StashRatioMax);
 	}
 
@@ -162,7 +171,8 @@ void UStashBlueprint::OpenCard(const FString& URL)
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card on iOS: %s"), *URL);
 	[[StashNativeCardWrapper sharedInstance] openCardWithURL:URL.GetNSString()];
 #elif PLATFORM_ANDROID
-	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card on Android: %s"), *URL);
+	// AND-14: checkout URLs carry session/checkout tokens; log length only, not the full URL.
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card on Android: urlLen=%d"), URL.Len());
 	AndroidUtils::CallJavaCode<void>(
 		"com/Plugins/Stash/StashHelper",
 		"OpenCard",
@@ -205,7 +215,8 @@ void UStashBlueprint::OpenCardWithConfig(const FString& URL, const FStashCardCon
 		tabletHeightRatioLandscape:SafeConfig.TabletHeightRatioLandscape
 		backgroundColor:bgColor];
 #elif PLATFORM_ANDROID
-	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card with config on Android: %s"), *URL);
+	// AND-14: log URL length only, not the token-bearing URL.
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card with config on Android: urlLen=%d"), URL.Len());
 	const int32 BackdropLen = SafeConfig.AndroidCheckoutBackdrop.Num();
 	UE_LOG(LogStash, Log, TEXT("[StashBackdrop] OpenCardWithConfig: forcePortrait=%d backdropBytes=%d"),
 		SafeConfig.bForcePortrait ? 1 : 0, BackdropLen);
@@ -314,7 +325,8 @@ void UStashBlueprint::OpenBrowser(const FString& URL)
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening browser on iOS: %s"), *URL);
 	[[StashNativeCardWrapper sharedInstance] openBrowserWithURL:URL.GetNSString()];
 #elif PLATFORM_ANDROID
-	UE_LOG(LogStash, Log, TEXT("[Stash] Opening browser on Android: %s"), *URL);
+	// AND-14: log URL length only, not the token-bearing URL.
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening browser on Android: urlLen=%d"), URL.Len());
 	AndroidUtils::CallJavaCode<void>(
 		"com/Plugins/Stash/StashHelper",
 		"OpenBrowser",
@@ -362,7 +374,8 @@ void UStashBlueprint::OpenModal(const FString& URL)
 	UE_LOG(LogStash, Log, TEXT("[Stash] Opening modal on iOS: %s"), *URL);
 	[[StashNativeCardWrapper sharedInstance] openModalWithURL:URL.GetNSString()];
 #elif PLATFORM_ANDROID
-	UE_LOG(LogStash, Log, TEXT("[Stash] Opening modal on Android: %s"), *URL);
+	// AND-14: log URL length only, not the token-bearing URL.
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening modal on Android: urlLen=%d"), URL.Len());
 	AndroidUtils::CallJavaCode<void>(
 		"com/Plugins/Stash/StashHelper",
 		"OpenModal",
@@ -405,7 +418,8 @@ void UStashBlueprint::OpenModalWithConfig(const FString& URL, const FStashModalC
 		tabletHeightRatioLandscape:SafeConfig.TabletHeightRatioLandscape
 		backgroundColor:modalBg];
 #elif PLATFORM_ANDROID
-	UE_LOG(LogStash, Log, TEXT("[Stash] Opening modal with config on Android: %s"), *URL);
+	// AND-14: log URL length only, not the token-bearing URL.
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening modal with config on Android: urlLen=%d"), URL.Len());
 	AndroidUtils::CallJavaCode<void>(
 		"com/Plugins/Stash/StashHelper",
 		"OpenModalWithConfig",
@@ -493,11 +507,7 @@ void UStashBlueprint::SetAndroidKeepAliveConfig(const FStashKeepAliveConfig& Con
 void UStashBlueprint::SetAndroidCheckoutBackdropBytes(const TArray<uint8>& ImageBytes)
 {
 #if PLATFORM_ANDROID
-	if (!AndroidUtils::IsPlatformSupported())
-	{
-		UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] SetAndroidCheckoutBackdropBytes: AndroidUtils platform not ready (JNI init failed?)"));
-		return;
-	}
+	// CallJavaCode guards platform readiness internally; no extra IsPlatformSupported() check needed here.
 	UE_LOG(LogStash, Log, TEXT("[StashBackdrop] SetAndroidCheckoutBackdropBytes: forwarding %d bytes to Java"), ImageBytes.Num());
 	AndroidUtils::CallJavaCode<void>(
 		"com/Plugins/Stash/StashHelper",
@@ -516,11 +526,7 @@ void UStashBlueprint::SetAndroidCheckoutBackdropBytes(const TArray<uint8>& Image
 void UStashBlueprint::ClearAndroidCheckoutBackdrop()
 {
 #if PLATFORM_ANDROID
-	if (!AndroidUtils::IsPlatformSupported())
-	{
-		UE_LOG(LogStash, Warning, TEXT("[StashBackdrop] ClearAndroidCheckoutBackdrop: AndroidUtils platform not ready"));
-		return;
-	}
+	// CallJavaCode guards platform readiness internally; no extra IsPlatformSupported() check needed here.
 	UE_LOG(LogStash, Log, TEXT("[StashBackdrop] ClearAndroidCheckoutBackdrop → Java"));
 	AndroidUtils::CallJavaCode<void>(
 		"com/Plugins/Stash/StashHelper",
@@ -539,7 +545,7 @@ void UStashBlueprint::CaptureViewportForAndroidCheckoutBackdrop(UObject* WorldCo
 {
 	StashScheduleAndroidCheckoutBackdropCapture(WorldContextObject, [OnComplete](TArray<uint8> Bytes) mutable
 		{
-			OnComplete.ExecuteIfBound(Bytes);
+			OnComplete.ExecuteIfBound(MoveTemp(Bytes));
 		});
 }
 

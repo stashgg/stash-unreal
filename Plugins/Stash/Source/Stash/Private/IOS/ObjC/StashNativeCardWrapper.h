@@ -1,14 +1,10 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Unreal Engine SDK - iOS Wrapper Interface (Stash Native 2.1+)
+// Stash Unreal Engine SDK - iOS Wrapper Interface (Stash Native 2.2.4)
 
 #pragma once
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /**
  * Objective-C wrapper for Stash Native iOS SDK.
@@ -61,7 +57,3 @@ tabletHeightRatioLandscape:(float)tabletHeightRatioLandscape
 - (void)setLandscapeLockWhenCardClosed:(BOOL)enable;
 
 @end
-
-#ifdef __cplusplus
-}
-#endif

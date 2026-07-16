@@ -34,29 +34,10 @@ namespace
 	/** Resolves subsystem for Blueprint (explicit context) or native callbacks (nullptr → current play world). */
 	UStashSubsystem* GetStashSubsystemFromContext(UObject* WorldContextObject)
 	{
-		UWorld* World = nullptr;
-		if (WorldContextObject)
-		{
-			if (UWorld* W = Cast<UWorld>(WorldContextObject))
-			{
-				World = W;
-			}
-			else if (AActor* A = Cast<AActor>(WorldContextObject))
-			{
-				World = A->GetWorld();
-			}
-			else if (APlayerController* PC = Cast<APlayerController>(WorldContextObject))
-			{
-				World = PC->GetWorld();
-			}
-			else if (UGameInstance* GI = Cast<UGameInstance>(WorldContextObject))
-			{
-				if (FWorldContext* const Ctx = GI->GetWorldContext())
-				{
-					World = Ctx->World();
-				}
-			}
-		}
+		// GetWorldFromContextObject handles worlds, actors, widgets, components, and game instances uniformly.
+		UWorld* World = (WorldContextObject && GEngine)
+			? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull)
+			: nullptr;
 		if (!World && GEngine)
 		{
 #if WITH_EDITOR
@@ -85,35 +66,22 @@ namespace
 		return GI ? GI->GetSubsystem<UStashSubsystem>() : nullptr;
 	}
 
-	/** Native callbacks may arrive off the game thread; always dispatch On* broadcasts on the game thread. */
+	/**
+	 * Native callbacks may arrive off the game thread (Android JNI thread, iOS main thread).
+	 * Resolve engine/UObject state — the subsystem and the editor-preview world — ONLY inside the
+	 * game-thread lambda. Doing it on the calling thread would race world creation/teardown and GC
+	 * (GetStashSubsystemFromContext walks the world list / game instances) and tear the non-atomic
+	 * TWeakObjectPtr copy of GEditorPreviewCallbackWorld. Capture only the payload broadcasts.
+	 */
 	template<typename FSubBroadcast, typename FStaticBroadcast>
 	void BroadcastStashCallback(FSubBroadcast&& SubBroadcast, FStaticBroadcast&& StaticBroadcast)
 	{
-#if WITH_EDITOR
-		TWeakObjectPtr<UWorld> WorldAtDispatch = GEditorPreviewCallbackWorld;
-#else
-		TWeakObjectPtr<UWorld> WorldAtDispatch;
-#endif
-		UStashSubsystem* SubsystemAtCapture = GetStashSubsystemFromContext(nullptr);
-		TWeakObjectPtr<UStashSubsystem> SubsystemAtDispatch = SubsystemAtCapture;
 		AsyncTask(ENamedThreads::GameThread, [
-			WorldAtDispatch,
-			SubsystemAtDispatch,
 			SubBroadcast = Forward<FSubBroadcast>(SubBroadcast),
 			StaticBroadcast = Forward<FStaticBroadcast>(StaticBroadcast)
 		]() mutable {
-			UStashSubsystem* Sub = SubsystemAtDispatch.Get();
-			if (!Sub && WorldAtDispatch.IsValid())
-			{
-				if (UGameInstance* GI = WorldAtDispatch->GetGameInstance())
-				{
-					Sub = GI->GetSubsystem<UStashSubsystem>();
-				}
-			}
-			if (!Sub)
-			{
-				Sub = GetStashSubsystemFromContext(nullptr);
-			}
+			// Resolves subsystem via the current play/preview world (reads GEditorPreviewCallbackWorld internally).
+			UStashSubsystem* Sub = GetStashSubsystemFromContext(nullptr);
 			if (Sub)
 			{
 				SubBroadcast(Sub);

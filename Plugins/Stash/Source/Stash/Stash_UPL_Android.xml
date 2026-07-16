@@ -80,16 +80,27 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
       -keep interface com.Plugins.** { *; }
       -keep public class com.Plugins.Stash.** { public protected *; }
 
-      <!-- Stash Native SDK classes -->
+      <!-- Stash Native SDK classes.
+           AND-03 / AND-10: the full "-keep class com.stash.** { *; }" is REQUIRED by StashHelper.java's
+           purchase-processing reflection into stash-native PRIVATE fields/classes (StashNativeCard.plugin,
+           plugin.webView, plugin.currentDialog, StashNativeCardPortraitActivity.isPurchaseProcessing/webView).
+           R8 would strip those private members without this keep. Keep coupled to that reflection — only
+           narrow this rule if/when StashHelper.java's reflection is removed. -->
       -dontwarn com.stash.**
       -keep class com.stash.** { *; }
       -keep interface com.stash.** { *; }
 
-      -dontwarn androidx.**
-      -keep class androidx.** { *; }
-      -keep interface androidx.** { *; }
+      <!-- AND-10: narrowed from a blanket androidx.** keep to only what the SDK touches (verified in the
+           2.2.4 AAR: androidx.browser, androidx.core, androidx.webkit). The AAR ships its own consumer
+           rules for its public API; keeping all of AndroidX cost real APK size under R8. -->
+      -dontwarn androidx.browser.**
+      -keep class androidx.browser.** { *; }
+      -dontwarn androidx.webkit.**
+      -keep class androidx.webkit.** { *; }
+      -dontwarn androidx.core.app.**
+      -keep class androidx.core.app.** { *; }
 
-      -keep class com.facebook.** { *; }
+      <!-- AND-10: removed dead "-keep class com.facebook.** { *; }" — zero Facebook classes exist in the AAR. -->
     </insert>
   </proguardAdditions>
 
@@ -104,7 +115,9 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
   <!-- Manifest permissions merged here — see README "Manifest permissions & privacy review". -->
   <androidManifestUpdates>
 
-    <!-- For UE4: target SDK 31 update the SplashActivity activity -->
+    <!-- AND-11: UE4 / ≤5.2 compat only — no-op on newer engines. Matches "com.epicgames.ue4.SplashActivity";
+         UE5 renamed it to com.epicgames.unreal.SplashActivity and UE 5.7's deploy already emits
+         android:exported="true", so this loop matches nothing on the UE5 engines this plugin targets. -->
     <loopElements tag="activity">
       <setStringFromAttribute result="activityName" tag="$" name="android:name"/>
       <setBoolIsEqual result="bSplashActivity" arg1="$S(activityName)" arg2="com.epicgames.ue4.SplashActivity"/>
@@ -114,17 +127,13 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
         </true>
       </if>
     </loopElements>
-    
 
-    <!-- For Android 13 (API 33) -->
-    <addPermission android:name="com.google.android.gms.permission.AD_ID"/>
-    <removePermission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-    <addPermission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+    <!-- AND-07: removed the AD_ID permission add and the WRITE/READ_EXTERNAL_STORAGE edits — none relate to
+         Stash Pay checkout (template leftovers that forced Play Data-safety declarations onto every integrator).
+         The StashNative AAR manifest already merges INTERNET + foreground-service permissions, which is all
+         checkout needs. (Paired with DOC-13 on the README side.) -->
 
-    <!-- For Android 14 (API 34) -->
-    <addPermission android:name="android.permission.READ_EXTERNAL_STORAGE" android:minSdkVersion="33"/>
 
-    
     <!-- add Elements -->
     <addElements tag="application">
       <!-- Your lines that you want to add to the "application" section -->
@@ -142,17 +151,10 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
   <!-- optional app build.gradle additions -->
   <buildGradleAdditions>
     <insert>
-      ext {
-        android {
-          compileSdkVersion 35
-          buildTypes {
-            release {
-              minifyEnabled false
-            }
-          }
-        }
-      }
-
+      <!-- AND-09: removed the ext{ android{ compileSdkVersion 35; buildTypes.release.minifyEnabled false } }
+           override. A third-party payment plugin must not silently force the host app's compile SDK or
+           disable release minification app-wide. The plugin's ProGuard keeps above already protect the SDK
+           if the game enables minification. -->
       repositories {
         mavenCentral()
         flatDir {
@@ -176,22 +178,18 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
     <!-- dependencies *.AAR libraries -->
     <insert>
       dependencies {
-      implementation("com.squareup.okhttp3:okhttp:3.12.13")
-      implementation("com.squareup.okhttp3:okhttp-urlconnection:3.12.13")
-      implementation('com.google.android.play:review:2.0.1')
-
-      implementation 'com.google.guava:guava:28.2-android'
+      // AND-08: removed okhttp (×2), com.google.android.play:review, guava, and androidx.work:work-runtime —
+      // a constant-pool scan of the 2.2.4 AAR shows ZERO references to any of them (okhttp 3.12.x is also EOL
+      // since 2021 with known CVEs). The SDK references only androidx.browser/core/webkit (+ annotation).
       implementation 'androidx.annotation:annotation:1.0.0'
 
       // Stash Native 2.1+ keep-alive calls ServiceCompat.startForeground(Service, int, Notification, int).
       // UE4's default transitive androidx.core is often too old → NoSuchMethodError without an explicit pin.
       implementation 'androidx.core:core:1.13.1'
 
-      implementation 'androidx.work:work-runtime:2.7.1'
-      
       // Stash Native SDK - pre-built AAR (see gradleCopies StashNative-*.aar → libs/StashNative.aar)
       implementation(name: 'StashNative', ext: 'aar')
-      
+
       // Dependencies required by Stash Native SDK
       implementation 'androidx.browser:browser:1.7.0'
       implementation 'androidx.webkit:webkit:1.5.0'
@@ -244,9 +242,21 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
 
   <!-- optional additions to GameActivity onStart in GameActivity.java -->
   <gameActivityOnStartAdditions>
-    <!-- For Android 14 (API 34) -->
-    <replace find="registerReceiver(consoleCmdReceiver, new IntentFilter(Intent.ACTION_RUN));"
-             with="registerReceiver(consoleCmdReceiver, new IntentFilter(Intent.ACTION_RUN), RECEIVER_EXPORTED);"/>
+    <!-- AND-11: UE4 / ≤5.2 compat only — no-op on newer engines. UE 5.7's GameActivity template already
+         registers this receiver with RECEIVER_EXPORTED, so the target line is absent and this <replace>
+         patches nothing. Detect presence first and <log> which path applied, so packaging output is honest. -->
+    <setStringContains result="bHasLegacyRegisterReceiver" source="$S(Output)"
+        find="registerReceiver(consoleCmdReceiver, new IntentFilter(Intent.ACTION_RUN));"/>
+    <if condition="bHasLegacyRegisterReceiver">
+      <true>
+        <log text="Stash Android -> patching legacy registerReceiver(ACTION_RUN) with RECEIVER_EXPORTED (UE4 / ≤5.2 compat)"/>
+        <replace find="registerReceiver(consoleCmdReceiver, new IntentFilter(Intent.ACTION_RUN));"
+                 with="registerReceiver(consoleCmdReceiver, new IntentFilter(Intent.ACTION_RUN), RECEIVER_EXPORTED);"/>
+      </true>
+      <false>
+        <log text="Stash Android -> registerReceiver(ACTION_RUN) target not found (UE 5.3+ already exports it); skipping RECEIVER_EXPORTED patch"/>
+      </false>
+    </if>
   </gameActivityOnStartAdditions>
 
   <!--  optional base build.gradle buildscript additions -->

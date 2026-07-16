@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Unreal Engine SDK - iOS Wrapper Implementation (Stash Native 2.1+)
+// Stash Unreal Engine SDK - iOS Wrapper Implementation (Stash Native 2.2.4)
 
 #import "StashNativeCardWrapper.h"
 #import <StashNative/StashNative.h>
@@ -22,9 +22,14 @@ static void StashClearForcePortrait(void);
 static void StashStartPurchaseProcessingPoll(void);
 static void StashStopPurchaseProcessingPoll(void);
 
+// If the card never presents (bad URL, SDK failure), the poll would otherwise fire on the
+// main queue for the app's lifetime. Give it a pre-presentation timeout so it self-terminates.
+static const NSTimeInterval kPurchaseProcessingPresentTimeout = 10.0;
+
 static BOOL _lastReportedPurchaseProcessing = NO;
 static BOOL _purchaseProcessingPollSeenPresentation = NO;
 static dispatch_source_t _purchaseProcessingPollSource = nil;
+static NSTimeInterval _purchaseProcessingPollDeadline = 0.0;
 
 static void StashPurchaseProcessingPollFired(void)
 {
@@ -40,6 +45,11 @@ static void StashPurchaseProcessingPollFired(void)
 			}
 			StashStopPurchaseProcessingPoll();
 			_purchaseProcessingPollSeenPresentation = NO;
+		}
+		else if (CFAbsoluteTimeGetCurrent() >= _purchaseProcessingPollDeadline)
+		{
+			// Card never reached a presented state within the timeout; stop polling.
+			StashStopPurchaseProcessingPoll();
 		}
 		return;
 	}
@@ -65,6 +75,7 @@ static void StashStartPurchaseProcessingPoll(void)
 {
 	StashStopPurchaseProcessingPoll();
 	_purchaseProcessingPollSeenPresentation = NO;
+	_purchaseProcessingPollDeadline = CFAbsoluteTimeGetCurrent() + kPurchaseProcessingPresentTimeout;
 	dispatch_queue_t queue = dispatch_get_main_queue();
 	_purchaseProcessingPollSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue);
 	dispatch_source_set_timer(
@@ -133,6 +144,12 @@ static void StashStopPurchaseProcessingPoll(void)
 
 - (void)stashNativeCardDidEncounterNetworkError
 {
+	StashStopPurchaseProcessingPoll();
+	if (_lastReportedPurchaseProcessing)
+	{
+		_lastReportedPurchaseProcessing = NO;
+		StashNativeOnProcessingCompleted();
+	}
 	StashClearForcePortrait();
 	StashNativeOnNetworkError();
 }
@@ -183,12 +200,62 @@ static UIWindow* StashMainGameWindow(void)
 	return nil;
 }
 
+// Desired orientation mask for the host window in our deterministic states (landscape lock or
+// force portrait). Returns 0 when we have no explicit preference and the VC chain should decide.
+static UIInterfaceOrientationMask StashDesiredInterfaceOrientationMask(void)
+{
+	if (_landscapeLockWhenCardClosed)
+	{
+		if (_forcePortraitActive || [[StashNativeCard sharedInstance] isCurrentlyPresented])
+			return UIInterfaceOrientationMaskAll;
+		return UIInterfaceOrientationMaskLandscapeLeft | UIInterfaceOrientationMaskLandscapeRight;
+	}
+	if (_forcePortraitActive)
+		return UIInterfaceOrientationMaskAll;
+	return 0;
+}
+
+// Re-evaluates supported interface orientations after our flags change.
+//
+// NOTE: -[UIViewController attemptRotationToDeviceOrientation] is deprecated and a no-op on
+// iOS 16+, so on iOS 16+ we ask the VC chain to recompute its supported orientations
+// (setNeedsUpdateOfSupportedInterfaceOrientations) and, when we have a deterministic mask,
+// request a geometry update on the window scene so the window snaps immediately.
+//
+// TODO: rotation behavior of this path needs on-device verification on iOS 16/17.
+static void StashRefreshSupportedInterfaceOrientations(void)
+{
+	if (@available(iOS 16.0, *))
+	{
+		UIWindow* window = StashMainGameWindow();
+		for (UIViewController* vc = window.rootViewController; vc != nil; vc = vc.presentedViewController)
+		{
+			[vc setNeedsUpdateOfSupportedInterfaceOrientations];
+		}
+
+		UIInterfaceOrientationMask desired = StashDesiredInterfaceOrientationMask();
+		if (desired != 0 && [window.windowScene isKindOfClass:[UIWindowScene class]])
+		{
+			UIWindowScene* scene = window.windowScene;
+			UIWindowSceneGeometryPreferencesIOS* prefs =
+				[[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:desired];
+			[scene requestGeometryUpdateWithPreferences:prefs errorHandler:^(NSError* error) {
+				// Best-effort: setNeedsUpdateOfSupportedInterfaceOrientations above still applies.
+			}];
+		}
+	}
+	else
+	{
+		[UIViewController attemptRotationToDeviceOrientation];
+	}
+}
+
 static void StashClearForcePortrait(void)
 {
 	if (_forcePortraitActive)
 	{
 		_forcePortraitActive = NO;
-		[UIViewController attemptRotationToDeviceOrientation];
+		StashRefreshSupportedInterfaceOrientations();
 	}
 }
 
@@ -208,8 +275,13 @@ static NSUInteger StashDelegateSupportedOrientationsForWindow(id self, SEL _cmd,
 {
 	if (_landscapeLockWhenCardClosed)
 	{
-		if ((_forcePortraitActive || [[StashNativeCard sharedInstance] isCurrentlyPresented])
-			&& window && window.windowLevel >= UIWindowLevelAlert)
+		// Ask the SDK whether its own (portrait card / browser) window is the active one. This is
+		// the SDK's supported manual path (see StashNativeCard.h) and replaces the previous
+		// hand-rolled window-level heuristic.
+		UIInterfaceOrientationMask stash = [StashNativeCard supportedInterfaceOrientationsForWindow:window];
+		if (stash != 0)
+			return stash;
+		if (_forcePortraitActive)
 			return UIInterfaceOrientationMaskAll;
 		return UIInterfaceOrientationMaskLandscapeLeft | UIInterfaceOrientationMaskLandscapeRight;
 	}
@@ -244,32 +316,68 @@ static void InstallAppDelegateOrientationHook(void)
 	});
 }
 
+// Installs the supportedInterfaceOrientations hook on the given root VC's class.
+//
+// Safe-swizzle rules (IOS-07):
+//   - class_getInstanceMethod returns inherited methods and method_setImplementation mutates the
+//     *defining* class, so we must not blindly setImplementation on a possibly-inherited method
+//     (that would rewrite UIViewController itself app-wide, including the SDK's card VC).
+//   - We try class_addMethod first: it succeeds only when the class does NOT already define the
+//     selector, adding our override and leaving the inherited IMP as the fallthrough. When it
+//     fails, the class implements the selector itself and it is safe to setImplementation on it.
+//   - Because there is a single "original IMP" global, we install on exactly one class. If a
+//     different root VC class appears later, we log and skip rather than clobber the saved IMP.
+//
+// Returns YES when the hook is installed for rootVC's class (either newly or already).
+static BOOL StashSwizzleRootVC(UIViewController* rootVC)
+{
+	if (!rootVC) return NO;
+
+	Class vcClass = [rootVC class];
+	if (_swizzledRootVCClass != nil)
+	{
+		if (vcClass == _swizzledRootVCClass) return YES;
+		NSLog(@"[Stash] Root VC orientation hook already installed on %@; skipping re-swizzle on %@ to avoid overwriting the saved original implementation.",
+			NSStringFromClass(_swizzledRootVCClass), NSStringFromClass(vcClass));
+		return NO;
+	}
+
+	SEL sel = @selector(supportedInterfaceOrientations);
+	Method inherited = class_getInstanceMethod(vcClass, sel);
+	const char* types = inherited ? method_getTypeEncoding(inherited) : "Q@:";
+	IMP newImp = (IMP)StashRootVCSupportedInterfaceOrientations;
+
+	if (class_addMethod(vcClass, sel, newImp, types))
+	{
+		// The class did not define the selector itself; our override now shadows the inherited
+		// implementation, which we call through for the pass-through case.
+		OriginalRootVCSupportedOrientations = inherited
+			? (NSUInteger(*)(id, SEL))method_getImplementation(inherited)
+			: NULL;
+	}
+	else
+	{
+		// The class implements the selector itself; safe to swap its own implementation.
+		Method own = class_getInstanceMethod(vcClass, sel);
+		OriginalRootVCSupportedOrientations = (NSUInteger(*)(id, SEL))method_getImplementation(own);
+		method_setImplementation(own, newImp);
+	}
+	_swizzledRootVCClass = vcClass;
+	return YES;
+}
+
 static void TryInstallRootVCOrientationHookAndRetry(int attempt);
 
 static void TryInstallRootVCOrientationHook(void)
 {
-	UIWindow* mainWindow = StashMainGameWindow();
-	UIViewController* rootVC = mainWindow.rootViewController;
+	UIViewController* rootVC = StashMainGameWindow().rootViewController;
 	if (!rootVC)
 	{
 		TryInstallRootVCOrientationHookAndRetry(0);
 		return;
 	}
-	Class vcClass = [rootVC class];
-	if (vcClass == _swizzledRootVCClass)
-	{
-		[UIViewController attemptRotationToDeviceOrientation];
-		return;
-	}
-	SEL sel = @selector(supportedInterfaceOrientations);
-	Method m = class_getInstanceMethod(vcClass, sel);
-	if (m)
-	{
-		OriginalRootVCSupportedOrientations = (NSUInteger(*)(id, SEL))method_getImplementation(m);
-		method_setImplementation(m, (IMP)StashRootVCSupportedInterfaceOrientations);
-		_swizzledRootVCClass = vcClass;
-		[UIViewController attemptRotationToDeviceOrientation];
-	}
+	StashSwizzleRootVC(rootVC);
+	StashRefreshSupportedInterfaceOrientations();
 }
 
 static const int kLandscapeLockMaxRetries = 15;
@@ -282,19 +390,8 @@ static void TryInstallRootVCOrientationHookAndRetry(int attempt)
 		UIViewController* rootVC = StashMainGameWindow().rootViewController;
 		if (rootVC)
 		{
-			Class vcClass = [rootVC class];
-			if (vcClass != _swizzledRootVCClass)
-			{
-				SEL sel = @selector(supportedInterfaceOrientations);
-				Method m = class_getInstanceMethod(vcClass, sel);
-				if (m)
-				{
-					OriginalRootVCSupportedOrientations = (NSUInteger(*)(id, SEL))method_getImplementation(m);
-					method_setImplementation(m, (IMP)StashRootVCSupportedInterfaceOrientations);
-					_swizzledRootVCClass = vcClass;
-				}
-			}
-			[UIViewController attemptRotationToDeviceOrientation];
+			StashSwizzleRootVC(rootVC);
+			StashRefreshSupportedInterfaceOrientations();
 		}
 		else
 		{
@@ -333,7 +430,12 @@ static StashNativeCardWrapper* _sharedInstance = nil;
 	if (self)
 	{
 		_delegateBridge = [[StashNativeDelegateBridge alloc] init];
-		[StashNativeCard sharedInstance].delegate = _delegateBridge;
+		StashNativeCard* card = [StashNativeCard sharedInstance];
+		card.delegate = _delegateBridge;
+		// Disable the SDK's own auto-swizzle of application:supportedInterfaceOrientationsForWindow:
+		// so it does not compete with our delegate hook. Our hook defers to the SDK's supported
+		// +supportedInterfaceOrientationsForWindow: API when the SDK's own window is active (IOS-06).
+		card.disableAutoOrientationUnlock = YES;
 	}
 	return self;
 }
@@ -368,7 +470,7 @@ static StashNativeCardWrapper* _sharedInstance = nil;
 		{
 			_forcePortraitActive = YES;
 			InstallLandscapeLockHooks();
-			[UIViewController attemptRotationToDeviceOrientation];
+			StashRefreshSupportedInterfaceOrientations();
 		}
 		StashNativeCardConfig* config = [[StashNativeCardConfig alloc] init];
 		config.forcePortrait = forcePortrait;
@@ -480,7 +582,7 @@ tabletHeightRatioLandscape:(float)tabletHeightRatioLandscape
 		InstallLandscapeLockHooks();
 		if (enable)
 		{
-			[UIViewController attemptRotationToDeviceOrientation];
+			StashRefreshSupportedInterfaceOrientations();
 		}
 	});
 }

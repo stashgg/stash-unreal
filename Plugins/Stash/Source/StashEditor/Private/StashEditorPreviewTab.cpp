@@ -47,6 +47,11 @@ TSharedRef<SDockTab> FStashEditorPreviewTab::SpawnPreviewTab(const FSpawnTabArgs
 		];
 }
 
+FName FStashEditorPreviewTab::GetMenuOwnerName()
+{
+	return FName(TEXT("StashEditorPreviewMenu"));
+}
+
 void FStashEditorPreviewTab::RegisterMenuEntry()
 {
 	UToolMenus* ToolMenus = UToolMenus::Get();
@@ -54,6 +59,8 @@ void FStashEditorPreviewTab::RegisterMenuEntry()
 	{
 		return;
 	}
+	// Scope the entry to a named owner so ShutdownModule can cleanly unregister it (hot-reload / live coding).
+	FToolMenuOwnerScoped OwnerScoped(GetMenuOwnerName());
 	UToolMenu* Menu = ToolMenus->ExtendMenu("LevelEditor.MainMenu.Window");
 	if (!Menu)
 	{

@@ -10,6 +10,11 @@
 class UStashSubsystem;
 struct FLatentActionInfo;
 
+// Accepted range for Stash card/modal size ratios. Exported so the editor preview (StashEditor)
+// clamps identically to the runtime — one source of truth for the native SDK's accepted range.
+inline constexpr float StashRatioMin = 0.1f;
+inline constexpr float StashRatioMax = 1.0f;
+
 // Stash payment and lifecycle callbacks
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashPaymentSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStashPaymentFailure);
@@ -193,12 +198,12 @@ public:
 	 * @param BackgroundColor Optional HTML hex shell color (e.g. "#RRGGBB"); leave empty for SDK default.
 	 * Assign **Android Checkout Backdrop** (byte array) on the returned struct in Blueprint (Set members / Break-Make) after viewport capture.
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Make Stash Card Config"))
+	UFUNCTION(BlueprintPure, Category = "Stash", meta = (DisplayName = "Make Stash Card Config"))
 	static FStashCardConfig MakeStashCardConfig(
-		bool bForcePortrait,
-		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float CardHeightRatioPortrait,
-		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float CardWidthRatioLandscape,
-		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float CardHeightRatioLandscape,
+		bool bForcePortrait = false,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float CardHeightRatioPortrait = 0.68f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float CardWidthRatioLandscape = 0.9f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float CardHeightRatioLandscape = 0.6f,
 		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float TabletWidthRatioPortrait = 0.6f,
 		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float TabletHeightRatioPortrait = 0.8f,
 		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float TabletWidthRatioLandscape = 0.8f,
@@ -221,7 +226,7 @@ public:
 	 * @param TabletHeightRatioLandscape Tablet height in landscape (0.1-1.0).
 	 * @param BackgroundColor Optional HTML hex shell color (e.g. "#RRGGBB"); leave empty for SDK default.
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Make Stash Modal Config"))
+	UFUNCTION(BlueprintPure, Category = "Stash", meta = (DisplayName = "Make Stash Modal Config"))
 	static FStashModalConfig MakeStashModalConfig(
 		bool bAllowDismiss = true,
 		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float PhoneWidthRatioPortrait = 0.9f,
@@ -258,6 +263,7 @@ public:
 
 	/**
 	 * Checks if the Stash card or modal is currently open.
+	 * Kept BlueprintCallable (not Pure) because on Android this crosses into Java via JNI.
 	 *
 	 * @return true if card or modal is displayed
 	 */
@@ -267,6 +273,7 @@ public:
 	/**
 	 * Checks if a purchase is currently being processed.
 	 * When true, the checkout UI cannot be dismissed by the user.
+	 * Kept BlueprintCallable (not Pure) because on Android this crosses into Java via JNI.
 	 *
 	 * @return true if a purchase is in progress
 	 */
@@ -331,7 +338,7 @@ public:
 	 * @param NotificationText Notification body text.
 	 * @param NotificationIconDrawableName Drawable base name in the game APK (no @drawable/, no extension); leave empty for SDK default.
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Make Stash Keep Alive Config"))
+	UFUNCTION(BlueprintPure, Category = "Stash", meta = (DisplayName = "Make Stash Keep Alive Config"))
 	static FStashKeepAliveConfig MakeStashKeepAliveConfig(
 		FString NotificationTitle,
 		FString NotificationText,
@@ -401,12 +408,16 @@ public:
 	 * World context can be a World, Actor, Player Controller, or Game Instance; pass Self from Level Blueprint or an Actor in a running game.
 	 * @return The subsystem, or null if no valid world is available (e.g. in editor before Play-in-Editor, or invalid context).
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Stash", meta = (DisplayName = "Get Stash Subsystem", WorldContext = "WorldContextObject"))
+	UFUNCTION(BlueprintPure, Category = "Stash", meta = (DisplayName = "Get Stash Subsystem", WorldContext = "WorldContextObject"))
 	static UStashSubsystem* GetStashSubsystem(UObject* WorldContextObject);
 
 	// ========================================================================
 	// Legacy static delegates (C++ only). Prefer UStashSubsystem via GetStashSubsystem.
 	// Do not bind both subsystem events and these static delegates — each native callback fires both.
+	//
+	// DEPRECATED: these static delegates are slated for removal in the next major version.
+	// Migrate C++ integrations to GetStashSubsystem()->On*. (No UE_DEPRECATED macro here on purpose:
+	// the plugin still broadcasts these internally, which would spam its own build with warnings.)
 	// ========================================================================
 	
 	/** @deprecated Prefer GetStashSubsystem()->OnPaymentSuccess for new C++ integrations. */

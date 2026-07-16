@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Unreal Engine SDK - Build Configuration (Stash Native 2.1+)
+// Stash Unreal Engine SDK - Build Configuration (Stash Native 2.2.4)
 //
 // Runtime module only — editor-only UX (Blueprint slider pins) lives in the sibling
 // StashEditor module (see Plugins/Stash/Stash.uplugin).
@@ -63,6 +63,9 @@ public class Stash : ModuleRules
 			// BUCK=1 — legacy native-SDK packaging flag; retained for xcframework compatibility.
 			PublicDefinitions.Add("TARGET_TV_OS=0");
 			PublicDefinitions.Add("BUCK=1");
+
+			// StashNative ObjC bridge sources are written ARC-style; enable ARC for this module's ObjC/ObjC++.
+			bEnableObjCAutomaticReferenceCounting = true;
 
 			PrivateDependencyModuleNames.AddRange(new string[]
 			{

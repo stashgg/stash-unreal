@@ -62,7 +62,6 @@ public:
 	const FStashPreviewSession& GetSession() const { return Session; }
 	FStashPreviewSession& GetMutableSession() { return Session; }
 
-	void NotifyUrlChanged(const FString& Url);
 	/** Parses, deduplicates, and dispatches a preview callback URL from any bridge (CEF scheme, console, navigation). */
 	bool DispatchPreviewCallbackUrl(const FString& Url);
 	void NotifyLoadCompleted();
@@ -87,19 +86,35 @@ public:
 
 	void EnsurePreviewTabOpen();
 
-	bool CanUsePreview() const;
+	/** Pure predicate: preview is enabled in settings and a WebBrowser module is available in this build. Warns once. */
+	bool IsPreviewEnabled() const;
+	/** Loads the WebBrowser module on demand (mutating). Called from PrepareSession. */
+	void EnsureWebBrowserLoaded();
 	bool PrepareSession(const FString& URL, EStashPreviewPresentationMode Mode);
 	void CommitSession();
 	void EndSession(bool bFireDismiss);
+	/** Clears transient session flags (processing, keyboard) without ending the session — used on BeginPIE. */
+	void ResetTransientSessionState();
 	void RefreshAllPanels();
 	FString NormalizeUrl(const FString& URL) const;
+
+private:
+	/** Dispatches an already-parsed preview callback to the matching Handle... broadcast; gates terminal branches on the open session. */
+	void HandleCallback(const FString& Path, const FString& Query);
+	/** If a purchase is processing, clears the flag and fires the processing-completed callback (shared by payment success/failure). */
+	void FinishProcessingIfActive();
+	/** Resets the per-session and rolling-time callback dedup state. */
+	void ResetCallbackDedup();
 
 	FStashPreviewSession Session;
 	TArray<TWeakPtr<SStashPreviewPanel>> PreviewPanels;
 
+	/** Rolling-time dedup for repeatable (non-terminal) callback keys arriving on multiple channels. */
 	FString LastPreviewCallbackDedupKey;
 	double LastPreviewCallbackTime = -1.0;
 	static constexpr double PreviewCallbackDedupSeconds = 0.25;
+	/** Session-scoped dedup: each terminal callback key (paymentSuccess/paymentFailure/optin/externalBrowser) fires at most once per session. */
+	TSet<FString> DispatchedTerminalKeys;
 
 	/** Mobile emulation for the CEF webview — device-scoped (not per session), read by the request-context header injector. */
 	FString PreviewUserAgent;

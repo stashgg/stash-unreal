@@ -69,7 +69,7 @@ int32 SStashPreviewStatusIcons::OnPaint(
 
 	const float GlyphGap = 6.f;
 
-	// Wifi: stacked triangle-fan (wide base → narrow apex).
+	// Wifi: stacked triangle-fan (wide base at top → narrow apex at bottom, like a real signal fan).
 	const float WifiW = 15.f, WifiH = 11.f;
 	X -= (GlyphGap + WifiW);
 	const float WifiX = X;
@@ -78,8 +78,8 @@ int32 SStashPreviewStatusIcons::OnPaint(
 	const float RowH = WifiH / WifiRows;
 	for (int32 Row = 0; Row < WifiRows; ++Row)
 	{
-		// Row 0 = apex (narrow, top); last row = base (wide, bottom).
-		const float T = static_cast<float>(Row + 1) / WifiRows;
+		// Row 0 = base (wide, top); last row = apex (narrow, bottom).
+		const float T = static_cast<float>(WifiRows - Row) / WifiRows;
 		const float RowW = WifiW * T;
 		const float RowX = WifiX + (WifiW - RowW) * 0.5f;
 		const float RowY = WifiTop + Row * RowH;
