@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Unreal Engine SDK - Build Configuration (Stash Native 2.2.4)
+// Stash Unreal Engine SDK - Build Configuration (Stash Native 2.3.0)
 //
 // Runtime module only — editor-only UX (Blueprint slider pins) lives in the sibling
 // StashEditor module (see Plugins/Stash/Stash.uplugin).

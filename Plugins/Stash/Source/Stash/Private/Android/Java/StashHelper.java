@@ -35,7 +35,7 @@ public class StashHelper {
     /** Filter logcat: adb logcat -s StashHelper:I *:S | grep StashBackdrop */
     private static final String BTAG = "[StashBackdrop]";
     // AND-03: purchase-processing detection reflects into stash-native PRIVATE internals. Every name
-    // below is coupled to stash-native's implementation (verified present in StashNative-2.2.4.aar):
+    // below is coupled to stash-native's implementation (verified present in StashNative-2.3.0.aar):
     //   - class  com.stash.stashnative.StashNativeCardPortraitActivity  (+ its private "isPurchaseProcessing" and "webView" fields)
     //   - field  StashNativeCard.plugin  → plugin.webView / plugin.currentDialog  (see resolveCheckoutWebView)
     // An SDK rename/refactor/obfuscation breaks these silently (Log.w only). If you bump the AAR, re-verify
@@ -371,7 +371,7 @@ public class StashHelper {
                 return;
             }
 
-            Log.d(TAG, "Initializing StashHelper (Stash Native 2.2.4)");
+            Log.d(TAG, "Initializing StashHelper (Stash Native 2.3.0)");
 
             registerCheckoutActivityTracking(activity);
             StashNativeCard card = StashNativeCard.getInstance();

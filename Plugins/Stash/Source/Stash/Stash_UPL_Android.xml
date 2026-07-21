@@ -91,7 +91,7 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
       -keep interface com.stash.** { *; }
 
       <!-- AND-10: narrowed from a blanket androidx.** keep to only what the SDK touches (verified in the
-           2.2.4 AAR: androidx.browser, androidx.core, androidx.webkit). The AAR ships its own consumer
+           2.3.0 AAR: androidx.browser, androidx.core, androidx.webkit). The AAR ships its own consumer
            rules for its public API; keeping all of AndroidX cost real APK size under R8. -->
       -dontwarn androidx.browser.**
       -keep class androidx.browser.** { *; }
@@ -179,7 +179,7 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
     <insert>
       dependencies {
       // AND-08: removed okhttp (×2), com.google.android.play:review, guava, and androidx.work:work-runtime —
-      // a constant-pool scan of the 2.2.4 AAR shows ZERO references to any of them (okhttp 3.12.x is also EOL
+      // a constant-pool scan of the 2.3.0 AAR shows ZERO references to any of them (okhttp 3.12.x is also EOL
       // since 2021 with known CVEs). The SDK references only androidx.browser/core/webkit (+ annotation).
       implementation 'androidx.annotation:annotation:1.0.0'
 
@@ -266,7 +266,7 @@ https://docs.unrealengine.com/en-US/SharingAndReleasing/Mobile/UnrealPluginLangu
 
   <!-- Copy pre-built Stash Native AAR to gradle project libs folder -->
   <gradleCopies>
-    <copyFile src="$S(PluginDir)/ThirdParty/Android/StashNative-2.2.4.aar" dst="$S(BuildDir)/gradle/app/libs/StashNative.aar" />
+    <copyFile src="$S(PluginDir)/ThirdParty/Android/StashNative-2.3.0.aar" dst="$S(BuildDir)/gradle/app/libs/StashNative.aar" />
   </gradleCopies>
 
 

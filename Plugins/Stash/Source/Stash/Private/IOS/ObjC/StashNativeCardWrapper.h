@@ -1,5 +1,5 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Unreal Engine SDK - iOS Wrapper Interface (Stash Native 2.2.4)
+// Stash Unreal Engine SDK - iOS Wrapper Interface (Stash Native 2.3.0)
 
 #pragma once
 

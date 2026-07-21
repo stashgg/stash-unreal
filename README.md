@@ -4,7 +4,7 @@
   <img src="https://github.com/stashgg/stash-native/raw/main/.github/assets/stash_unreal.png" width="128" height="128" alt="Stash Unreal Logo"/>
 </p>
 
-Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash-native), enabling Stash Pay IAP checkout and webshop presentation on Android and iOS via C++ and Blueprints. The plugin uses **Stash Native** (**2.2.4**).
+Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash-native), enabling Stash Pay IAP checkout and webshop presentation on Android and iOS via C++ and Blueprints. The plugin uses **Stash Native** (**2.3.0**).
 
 ## Requirements
 
@@ -135,8 +135,8 @@ UStashBlueprint::OpenCard(CheckoutURL);
 FStashCardConfig Config = UStashBlueprint::MakeStashCardConfig(
     false,   // bForcePortrait
     0.68f,   // CardHeightRatioPortrait
-    0.9f,    // CardWidthRatioLandscape
-    0.6f,    // CardHeightRatioLandscape
+    0.7f,    // CardWidthRatioLandscape
+    0.9f,    // CardHeightRatioLandscape
     0.6f, 0.8f, 0.8f, 0.65f,  // tablet ratios
     FString() // BackgroundColor (HTML hex)
 );
@@ -286,7 +286,7 @@ This is **intentional**: UE’s copied `GameActivity.java` and some engine/plugi
 
 #### Gradle dependencies and pins (`buildGradleAdditions`)
 
-The plugin adds only the Maven dependencies the **Stash Native** 2.2.4 AAR actually references (verified by scanning the AAR), plus the keep-alive Core pin:
+The plugin adds only the Maven dependencies the **Stash Native** 2.3.0 AAR actually references (verified by scanning the AAR), plus the keep-alive Core pin:
 
 | Dependency | Purpose |
 |------------|---------|
@@ -296,7 +296,7 @@ The plugin adds only the Maven dependencies the **Stash Native** 2.2.4 AAR actua
 | `androidx.browser:browser`, `androidx.webkit:webkit` | Required by stash-native (Chrome Custom Tabs / checkout WebView) |
 | Kotlin `1.8.22` resolution | Avoids duplicate Kotlin stdlib classes when Core 1.13.x is pinned |
 
-The previous `okhttp` (3.12.x), `guava`, Google Play `review`, and `androidx.work:work-runtime` pins have been **removed** — a scan of the shipped 2.2.4 AAR finds zero references to any of them (and okhttp 3.12.x is EOL). See **Android keep-alive service** for which remaining lines you can remove if you never enable keep-alive.
+The previous `okhttp` (3.12.x), `guava`, Google Play `review`, and `androidx.work:work-runtime` pins have been **removed** — a scan of the shipped 2.3.0 AAR finds zero references to any of them (and okhttp 3.12.x is EOL). See **Android keep-alive service** for which remaining lines you can remove if you never enable keep-alive.
 
 #### Manifest permissions & privacy review (`androidManifestUpdates`)
 
@@ -322,7 +322,7 @@ To change permissions, edit **`androidManifestUpdates`** in **`Stash_UPL_Android
 | `androidx.browser:browser` | 1.7.0 | Chrome Custom Tabs (in-app browser flows); required by stash-native |
 | `androidx.webkit:webkit` | 1.5.0 | WebView / checkout web content; required by stash-native |
 
-The `okhttp` (×2), `com.google.android.play:review`, `com.google.guava:guava`, and `androidx.work:work-runtime` pins were **removed** — verified absent from the 2.2.4 AAR.
+The `okhttp` (×2), `com.google.android.play:review`, `com.google.guava:guava`, and `androidx.work:work-runtime` pins were **removed** — verified absent from the 2.3.0 AAR.
 
 **ProGuard / R8** rules appended by the plugin:
 
@@ -339,7 +339,7 @@ The dead `com.facebook.**` keep was **removed** (zero Facebook classes exist in 
 | Hook | Effect |
 |------|--------|
 | **`prebuildCopies`** | Copies `StashHelper.java` / `StashInit.java` into the Gradle tree |
-| **`gradleCopies`** | Copies `ThirdParty/Android/StashNative-2.2.4.aar` → `libs/StashNative.aar` |
+| **`gradleCopies`** | Copies `ThirdParty/Android/StashNative-2.3.0.aar` → `libs/StashNative.aar` |
 | **`proguardAdditions`** | Keeps `com.Plugins.**`, `com.stash.**`, and the narrowed `androidx.browser/webkit/core.app` packages (see **Third-party libraries & ProGuard** above) |
 | **`gameActivityOnStartAdditions`** | **UE4 / ≤5.2 compat only.** Detects the legacy `registerReceiver(ACTION_RUN)` line and, only if present, patches it with `RECEIVER_EXPORTED` (Android 14+). On UE 5.3+ the target line is absent (the template already exports the receiver), so this **no-ops** and logs that it was skipped. |
 | **`androidManifestUpdates`** | No permission edits (removed). Only a **UE4 / ≤5.2 compat** patch that sets `android:exported="true"` on `com.epicgames.ue4.SplashActivity` — a no-op on the UE5 (`com.epicgames.unreal.*`) engines this plugin targets. |
@@ -497,12 +497,12 @@ Unset the variable or close the terminal to return to quiet packaging logs. This
 - **Payment callback runs twice:** You bound both **Get Stash Subsystem** events and legacy **`UStashBlueprint::OnPaymentSuccess`** (or another static delegate). Use **one** path — subsystem only is recommended.
 - **Blueprint shows old nodes (Open Checkout, Set Force Web Based Checkout):** The plugin API is **Open Card**, **Open Card With Config**, **Open Browser**, **Close Browser**, **Is Card Open**, **Dismiss Card** (no Open Checkout, no Force Web Based). If you still see old names, do a **clean rebuild**: close the editor, delete the `Intermediate` and `Binaries` folders in your project root, then reopen the `.uproject`. The editor will recompile and Blueprint will show only the new Stash nodes.
 - **iOS – undefined symbol / Library not loaded:** Add WebKit and SafariServices if needed; ensure **StashNative.xcframework** is embedded (Embed & Sign) and present under `Plugins/Stash/Source/Stash/ThirdParty/iOS/`.
-- **Android – class not found / blank card:** Ensure **StashNative** AAR is in `ThirdParty/Android/` (this repo ships `StashNative-2.2.4.aar`; the filename must match `Stash_UPL_Android.xml` → `gradleCopies`). Add internet permission. ProGuard: keep `com.stash.**`.
-- **Android – checkout backdrop has no effect:** Use a Stash Native Android AAR that supports the checkout backdrop on `StashNativeCard` (this repo ships 2.2.4). Confirm call order: set bytes (or capture delegate) **before** Open Card. If you replace the AAR with another build, update the `gradleCopies` `copyFile` `src` path to that filename.
+- **Android – class not found / blank card:** Ensure **StashNative** AAR is in `ThirdParty/Android/` (this repo ships `StashNative-2.3.0.aar`; the filename must match `Stash_UPL_Android.xml` → `gradleCopies`). Add internet permission. ProGuard: keep `com.stash.**`.
+- **Android – checkout backdrop has no effect:** Use a Stash Native Android AAR that supports the checkout backdrop on `StashNativeCard` (this repo ships 2.3.0). Confirm call order: set bytes (or capture delegate) **before** Open Card. If you replace the AAR with another build, update the `gradleCopies` `copyFile` `src` path to that filename.
 - **Blueprint – "Only exactly matching structures" between Make Stash Card Config and Open Card With Config:** Usually a **stale graph** after the `FStashCardConfig` struct changed. **Close the editor**, rebuild the **Stash** plugin (or full project), reopen, then **delete** the **Make Stash Card Config** and **Open Card With Config** nodes and place them again from the **Stash** category (or use **Refresh All Nodes** on the Blueprint). Ensure you are not mixing a **User-defined struct** with the same display name as the plugin’s **Stash Card Config**; the shell color pin must be **String** (HTML hex like `#RRGGBB`), not Linear Color.
 - **Blueprint – Make Stash Keep Alive Config missing Notification Icon Drawable Name:** The C++ struct changed; the editor is still using old plugin bytecode. **Close the editor**, rebuild the **Stash** plugin, reopen, **delete** the old **Make Stash Keep Alive Config** node, and add a fresh one from the **Stash** category (right-click → Stash → **Make Stash Keep Alive Config**). Prefer that node over the generic struct **Make** pin on **Stash Keep Alive Config**.
 - **Android – `Assertion failed: Result` in `Stack.h`:** Stale **WBP_StashUI** (or your widget) bytecode still references a removed **Make Stash Card Config** pin (e.g. old **Use Android Checkout Backdrop**). Open the widget, **delete** the **Make Stash Card Config** node, place a new one, wire only **Android Checkout Backdrop** from capture → **Open Card With Config**, compile, save, then **recook** Android.
-- **Android – crash on Open Browser with keep-alive:** A `NoSuchMethodError` / `NoClassDefFoundError` from the keep-alive foreground service usually means the packaged **`androidx.core`** is too old. Note the shipped 2.2.4 AAR calls `startForeground` directly and uses `NotificationCompat` (it does **not** reference `ServiceCompat.startForeground` — that story described an older AAR), so the pin is a defensive "recent Core" measure rather than a hard `ServiceCompat` requirement. Keep `Stash_UPL_Android.xml`'s **`implementation 'androidx.core:core:1.13.1'`** (or newer) if you use keep-alive; see the **Android keep-alive service** section above.
+- **Android – crash on Open Browser with keep-alive:** A `NoSuchMethodError` / `NoClassDefFoundError` from the keep-alive foreground service usually means the packaged **`androidx.core`** is too old. Note the shipped 2.3.0 AAR calls `startForeground` directly and uses `NotificationCompat` (it does **not** reference `ServiceCompat.startForeground` — that story described an older AAR), so the pin is a defensive "recent Core" measure rather than a hard `ServiceCompat` requirement. Keep `Stash_UPL_Android.xml`'s **`implementation 'androidx.core:core:1.13.1'`** (or newer) if you use keep-alive; see the **Android keep-alive service** section above.
 - **Android – Gradle `checkDebugDuplicateClasses` (Kotlin):** Duplicate classes in `kotlin-stdlib` vs `kotlin-stdlib-jdk7` / `kotlin-stdlib-jdk8` usually means mixed Kotlin versions. The plugin’s UPL should force **`org.jetbrains.kotlin` to 1.8.22**; if you still see this after merging other Gradle snippets, align or exclude conflicting Kotlin artifacts.
 - **Xcode: "ExternalBuildToolExecution failed" / "never received target ended message":** The real error is from UnrealBuildTool. Check `~/Library/Application Support/Epic/UnrealBuildTool/Log.txt`. Clear Xcode caches: delete `~/Library/Developer/Xcode/DerivedData`, then regenerate project files and reopen. Alternatively, build from Unreal Editor (open the `.uproject`) or from the command line with the engine's `Build.sh` instead of Xcode.
 
@@ -540,7 +540,7 @@ UE_ROOT="/path/to/UnrealEngine"
 
 ## Versioning
 
-This plugin follows semantic versioning (major.minor.patch). Pair it with **Stash Native 2.2.x** binaries in `ThirdParty` for **keep-alive notification icon** (`KeepAliveConfig.notificationIconResId`), **backgroundColor**, **onExternalPayment**, and **keep-alive** APIs. 
+This plugin follows semantic versioning (major.minor.patch). Pair it with **Stash Native 2.2.x+** binaries in `ThirdParty` (this repo ships **2.3.0**) for **keep-alive notification icon** (`KeepAliveConfig.notificationIconResId`), **backgroundColor**, **onExternalPayment**, and **keep-alive** APIs. 
 **StashNative-2.1.4+** remains required for checkout backdrop (`setBackdropBytes`).
 **Stash Native 2.0+** uses **OpenCard**, **OpenModal**, **OpenBrowser**, and **CloseBrowser**; legacy **OpenCheckout** / **StashPay** naming is no longer used.
 

@@ -6,7 +6,9 @@
 
 namespace
 {
-	const FSlateBrush& FillBrush()
+	// Named uniquely (not FillBrush) so a unity build merging this TU with
+	// SStashPreviewKeyboard.cpp does not collide in the shared anonymous namespace.
+	const FSlateBrush& StatusIconFillBrush()
 	{
 		static const FSlateBrush* Brush = FCoreStyle::Get().GetBrush("WhiteBrush");
 		return *Brush;
@@ -22,7 +24,7 @@ namespace
 		FSlateDrawElement::MakeBox(
 			Out, Layer,
 			Geo.ToPaintGeometry(FVector2f(W, H), FSlateLayoutTransform(FVector2f(X, Y))),
-			&FillBrush(), ESlateDrawEffect::None, Color);
+			&StatusIconFillBrush(), ESlateDrawEffect::None, Color);
 	}
 }
 

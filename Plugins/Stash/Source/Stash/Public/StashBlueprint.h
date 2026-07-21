@@ -74,13 +74,13 @@ struct FStashCardConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
 	float CardHeightRatioPortrait = 0.68f;
 
-	/** Phone card width ratio for landscape (0.1-1.0). Used when bForcePortrait is false. Default 0.9. */
+	/** Phone card width ratio for landscape (0.1-1.0). Used when bForcePortrait is false. Default 0.7 (Stash Native 2.3.0 SDK default). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
-	float CardWidthRatioLandscape = 0.9f;
+	float CardWidthRatioLandscape = 0.7f;
 
-	/** Phone card height ratio for landscape (0.1-1.0). Used when bForcePortrait is false. Default 0.6. */
+	/** Phone card height ratio for landscape (0.1-1.0). Used when bForcePortrait is false. Default 0.9 (Stash Native 2.3.0 SDK default). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
-	float CardHeightRatioLandscape = 0.6f;
+	float CardHeightRatioLandscape = 0.9f;
 
 	/** Tablet width ratio for portrait (0.1-1.0). Default 0.6. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stash", meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0"))
@@ -202,8 +202,8 @@ public:
 	static FStashCardConfig MakeStashCardConfig(
 		bool bForcePortrait = false,
 		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float CardHeightRatioPortrait = 0.68f,
-		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float CardWidthRatioLandscape = 0.9f,
-		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float CardHeightRatioLandscape = 0.6f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float CardWidthRatioLandscape = 0.7f,
+		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float CardHeightRatioLandscape = 0.9f,
 		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float TabletWidthRatioPortrait = 0.6f,
 		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float TabletHeightRatioPortrait = 0.8f,
 		UPARAM(meta = (ClampMin = "0.1", ClampMax = "1.0", UIMin = "0.1", UIMax = "1.0")) float TabletWidthRatioLandscape = 0.8f,

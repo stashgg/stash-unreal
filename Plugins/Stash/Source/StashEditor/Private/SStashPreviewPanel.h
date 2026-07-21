@@ -38,8 +38,8 @@ private:
 	static constexpr float CardMaxExpandHeightRatio = 0.9f;
 	static constexpr float DeviceBezelThickness = 12.f;
 	static constexpr float BackdropFlashSeconds = 0.25f;
-	/** How long a load may run before we surface a load error if OnLoadCompleted never fires. */
-	static constexpr float LoadTimeoutSeconds = 5.f;
+	/** How long a load may run before we surface a load error if OnLoadCompleted never fires (matches Stash Native 2.3.0's 15 s network timeout). */
+	static constexpr float LoadTimeoutSeconds = 15.f;
 
 	FReply OnReloadClicked();
 	FReply OnDismissClicked();
