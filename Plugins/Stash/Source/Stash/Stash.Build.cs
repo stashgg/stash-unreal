@@ -67,9 +67,19 @@ public class Stash : ModuleRules
 			// StashNative ObjC bridge sources are written ARC-style; enable ARC for this module's ObjC/ObjC++.
 			bEnableObjCAutomaticReferenceCounting = true;
 
+			// ARC is not part of UBT's shared-PCH signature, so an engine SharedPCH built ARC-off
+			// (by other ARC-off modules like the game module) gets reused here and fails with
+			// "Objective-C automated reference counting was disabled in precompiled file ... but is
+			// currently enabled". Use an explicit private PCH so this module compiles its own PCH in
+			// its own (ARC-on) environment instead of the shared one.
+			PrivatePCHHeaderFile = "Private/StashPrivatePCH.h";
+
 			PrivateDependencyModuleNames.AddRange(new string[]
 			{
-				"Launch"
+				"Launch",
+				// IOSAppDelegate.h — the ObjC wrapper nudges UE's didRotate: after programmatic
+				// scene rotations (force portrait) so the engine resizes its backbuffer.
+				"ApplicationCore",
 			});
 
 			// iOS build configuration via UPL

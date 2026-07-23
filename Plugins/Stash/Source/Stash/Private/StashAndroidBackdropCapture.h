@@ -5,7 +5,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "LatentActions.h"
+#include "Engine/LatentActionManager.h" // FLatentActionInfo (was pulled in transitively via the engine shared PCH)
 
 /** Schedules end-of-frame viewport capture with retries; invokes OnDone on the game thread with JPEG bytes (or empty on failure). */
 void StashScheduleAndroidCheckoutBackdropCapture(UObject* WorldContextObject, TFunction<void(TArray<uint8>)> OnDone);
