@@ -21,7 +21,7 @@ public class StashInit {
 	 * @return 1 if initialization successful
 	 */
 	@Keep
-	public static int Initialization() {
+	public static int initialize() {
 		return 1;
 	}
 }

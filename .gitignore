@@ -1,11 +1,14 @@
 # Unreal Engine Build Artifacts
 Binaries/
+Build/
 Intermediate/
+
 DerivedDataCache/
 Saved/
 
 # Unreal Engine Packaging
 packaged/
+package/
 
 # Unreal Engine IDE Files
 FileOpenOrder/
@@ -36,6 +39,7 @@ FileOpenOrder/
 
 # Visual Studio files
 .vs/
+*.vsconfig
 *.sln
 *.suo
 *.user
@@ -112,3 +116,9 @@ CrashReports/
 
 # Visual Studio settings
 *.sln.DotSettings.user
+
+# Scripts
+Scripts/
+
+# Internal engineering notes (not for distribution)
+internal-docs/

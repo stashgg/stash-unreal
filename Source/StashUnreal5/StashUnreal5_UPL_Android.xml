@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+Sample-project only: copies example keep-alive notification icons into the Android APK.
+Integrators who copy only Plugins/Stash/ do not get these drawables.
+-->
+
+<root xmlns:android="http://schemas.android.com/apk/res/android">
+  <init>
+    <log text="StashUnreal5 sample -> copying example keep-alive notification icons"/>
+  </init>
+
+  <gradleCopies>
+    <copyFile src="$S(ProjectDir)/StashUnrealSample/Android/res/drawable/stash_icon.png"
+              dst="$S(BuildDir)/gradle/app/src/main/res/drawable/stash_icon.png" />
+    <copyFile src="$S(ProjectDir)/StashUnrealSample/Android/res/drawable/stash_icon_black.png"
+              dst="$S(BuildDir)/gradle/app/src/main/res/drawable/stash_icon_black.png" />
+  </gradleCopies>
+</root>

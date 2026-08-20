@@ -11,41 +11,23 @@ https://github.com/EpicGames/UnrealEngine/blob/release/Engine/Source/Programs/Un
 
     <!-- =============================================================================================== -->
     <init>
-        <log text="Stash iOS -> Adding permission to plist"/>
-        <log text="Stash iOS -> Including Stash Pay SDK"/>
-        <trace enable="true"/>
+        <log text="Stash iOS -> Copying StashNative.xcframework"/>
+        <log text="Stash iOS -> Including Stash Native SDK"/>
 
-        <dumpvars/>
+        <!-- Opt-in UPL debug: set STASH_UPL_VERBOSE=1 before packaging (see README Debugging). -->
+        <setBoolEnvVarDefined result="bStashUplVerbose" value="%STASH_UPL_VERBOSE%"/>
+        <if condition="bStashUplVerbose">
+            <true>
+                <trace enable="true"/>
+                <dumpvars/>
+            </true>
+        </if>
     </init>
 
-    <!-- Copy pre-built StashPay XCFramework -->
+    <!-- Copy pre-built StashNative XCFramework -->
     <copyFiles>
-        <copyDir src="$S(PluginDir)/ThirdParty/iOS/StashPay.xcframework" 
-                 dst="$S(BuildDir)/Frameworks/StashPay.xcframework" />
+        <copyDir src="$S(PluginDir)/ThirdParty/iOS/StashNative.xcframework"
+                 dst="$S(BuildDir)/Frameworks/StashNative.xcframework" />
     </copyFiles>
-
-    <!-- =============================================================================================== -->
-    <iosPListUpdates>
-        <!-- Permission -->
-        <addElements tag="dict" once="true">
-            <key>UISupportedInterfaceOrientations</key>
-            <array>
-                <string>UIInterfaceOrientationPortrait</string>
-                <string>UIInterfaceOrientationLandscapeLeft</string>
-                <string>UIInterfaceOrientationLandscapeRight</string>
-            </array>
-            
-            <key>UISupportedInterfaceOrientations~ipad</key>
-            <array>
-                <string>UIInterfaceOrientationPortrait</string>
-                <string>UIInterfaceOrientationPortraitUpsideDown</string>
-                <string>UIInterfaceOrientationLandscapeLeft</string>
-                <string>UIInterfaceOrientationLandscapeRight</string>
-            </array>
-
-            <!-- end -->
-        </addElements>
-
-    </iosPListUpdates>
 
 </root>

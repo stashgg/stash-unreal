@@ -1,9 +1,9 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "1.0",
+	"VersionName": "2.3.0",
 	"FriendlyName": "Stash",
-	"Description": "Stash Pay native checkout integration for iOS and Android",
+	"Description": "The Stash package makes it simple to add Stash in-app purchases (IAPs) and webshops to your game or app. It delivers seamless, native-like payment flows and selection dialogs, which appear as system dialogs on Android and iOS through lightweight embedded webviews, while providing direct callbacks to your application.",
 	"Category": "Mobile",
 	"CreatedBy": "Stash Interactive Inc.",
 	"CreatedByURL": "https://stash.gg",
@@ -13,20 +13,26 @@
 	"CanContainContent": false,
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
-	"Installed": true,
 	"EnabledByDefault": false,
 	"RequiresBuildPlatform": true,
 	"Modules": [
 		{
 			"Name": "Stash",
 			"Type": "Runtime",
-			"LoadingPhase": "Default",
-			"WhitelistPlatforms": [
-				"Win64",
-				"Mac",
-				"Android",
-				"IOS"
-			]
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "StashEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "WebBrowser",
+			"Enabled": true,
+			"Optional": true,
+			"TargetAllowList": [ "Editor" ]
 		}
 	]
 }

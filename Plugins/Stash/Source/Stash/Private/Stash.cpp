@@ -1,8 +1,7 @@
 // Copyright Stash. All Rights Reserved.
-// Stash Pay Unreal Engine SDK - Module Implementation
+// Stash Unreal Engine SDK - Module Implementation
 
 #include "Stash.h"
-#include "StashEditorSettings.h"
 
 #if PLATFORM_ANDROID
 #include "Android/Utils/AndroidUtils.h"
@@ -11,49 +10,38 @@
 // Define the log category declared in Stash.h
 DEFINE_LOG_CATEGORY(LogStash);
 
-#define LOCTEXT_NAMESPACE "StashModule"
-
 void FStashModule::StartupModule()
 {
-	// Register settings in Project Settings -> Plugins -> Stash
-	if (ISettingsModule* SettingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings"))
-	{
-		UStashEditorSettings::RegisterEditorSettings(SettingsModule);
-	}
-
-	// Initialize platform-specific components
-	Initialization();
+	Initialize();
 }
 
 void FStashModule::ShutdownModule()
 {
 	// No cleanup needed - native SDKs handle their own lifecycle
-	// iOS: StashPayCardWrapper is a singleton that persists
-	// Android: StashPayCard is a singleton managed by the SDK
+	// iOS: StashNativeCardWrapper is a singleton that persists
+	// Android: StashNativeCard is a singleton managed by the SDK
 }
 
-void FStashModule::Initialization()
+void FStashModule::Initialize()
 {
 #if PLATFORM_ANDROID
-	AndroidUtils::Initialization();
+	AndroidUtils::Initialize();
 #endif
 
 #if PLATFORM_IOS
-	// iOS initialization handled by StashPayCardWrapper
+	// iOS initialization handled by StashNativeCardWrapper
 #endif
 }
 
 bool FStashModule::IsSupported()
 {
 #if PLATFORM_ANDROID
-	return AndroidUtils::isSupportPlatform();
+	return AndroidUtils::IsPlatformSupported();
 #elif PLATFORM_IOS
 	return true;
 #else
 	return false;
 #endif
 }
-
-#undef LOCTEXT_NAMESPACE
 
 IMPLEMENT_MODULE(FStashModule, Stash)
