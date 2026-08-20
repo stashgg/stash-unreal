@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <!--
-Sample-project only: copies example keep-alive notification icons into the Android APK.
+Sample-project only: copies example keep-alive notification icons and the
+branded launcher icons into the Android APK.
 Integrators who copy only Plugins/Stash/ do not get these drawables.
 -->
 
@@ -15,5 +16,17 @@ Integrators who copy only Plugins/Stash/ do not get these drawables.
               dst="$S(BuildDir)/gradle/app/src/main/res/drawable/stash_icon.png" />
     <copyFile src="$S(ProjectDir)/StashUnrealSample/Android/res/drawable/stash_icon_black.png"
               dst="$S(BuildDir)/gradle/app/src/main/res/drawable/stash_icon_black.png" />
+
+    <!-- Branded launcher icon (@drawable/icon), referenced by the generated manifest. -->
+    <copyFile src="$S(ProjectDir)/StashUnrealSample/Android/res/drawable/icon.png"
+              dst="$S(BuildDir)/gradle/app/src/main/res/drawable/icon.png" />
+    <copyFile src="$S(ProjectDir)/StashUnrealSample/Android/res/drawable-ldpi/icon.png"
+              dst="$S(BuildDir)/gradle/app/src/main/res/drawable-ldpi/icon.png" />
+    <copyFile src="$S(ProjectDir)/StashUnrealSample/Android/res/drawable-mdpi/icon.png"
+              dst="$S(BuildDir)/gradle/app/src/main/res/drawable-mdpi/icon.png" />
+    <copyFile src="$S(ProjectDir)/StashUnrealSample/Android/res/drawable-hdpi/icon.png"
+              dst="$S(BuildDir)/gradle/app/src/main/res/drawable-hdpi/icon.png" />
+    <copyFile src="$S(ProjectDir)/StashUnrealSample/Android/res/drawable-xhdpi/icon.png"
+              dst="$S(BuildDir)/gradle/app/src/main/res/drawable-xhdpi/icon.png" />
   </gradleCopies>
 </root>

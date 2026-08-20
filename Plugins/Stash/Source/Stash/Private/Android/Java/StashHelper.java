@@ -44,6 +44,8 @@ public class StashHelper {
     private static final String PORTRAIT_ACTIVITY_CLASS =
             "com.stash.stashnative.StashNativeCardPortraitActivity";
     private static volatile boolean isInitialized = false;
+    /** AND-03: false when the startup reflection self-check found a broken stash-native contract. */
+    private static volatile boolean reflectionContractOk = false;
     private static volatile boolean checkoutLifecycleRegistered = false;
     private static volatile WeakReference<Activity> checkoutPortraitActivityRef;
     private static final Object initLock = new Object();
@@ -284,6 +286,104 @@ public class StashHelper {
         }
     }
 
+    /**
+     * AND-03 follow-up: one-time verification that every private stash-native name this class
+     * reflects into still exists in the linked AAR.
+     *
+     * Without it a broken contract degrades SILENTLY: every reflection site catches and returns
+     * null/false, which is indistinguishable from "no purchase is processing", so
+     * OnPurchaseProcessing / OnProcessingCompleted simply stop firing with only a Log.w behind
+     * them. The two realistic causes are (a) the AAR was upgraded and these private names changed,
+     * and (b) the "-keep class com.stash.** { *; }" rule in Stash_UPL_Android.xml was narrowed, so
+     * R8 stripped the private fields from a RELEASE build only (debug keeps working).
+     *
+     * Logs Log.e naming the exact missing members so the breakage is visible in logcat at startup
+     * instead of surfacing as a missing spinner in the field.
+     *
+     * Verified against StashNative-2.3.0.aar:
+     *   com.stash.stashnative.StashNativeCardPortraitActivity { isPurchaseProcessing, webView }
+     *   com.stash.stashnative.StashNativeCard { plugin } -> { webView, currentDialog }
+     */
+    private static void verifyReflectionContract() {
+        final StringBuilder missing = new StringBuilder();
+
+        // Portrait checkout activity: authoritative purchase-processing source for the 75 ms poll.
+        Class<?> portraitClass = null;
+        try {
+            portraitClass = Class.forName(PORTRAIT_ACTIVITY_CLASS);
+        } catch (Throwable t) {
+            appendMissing(missing, "class " + PORTRAIT_ACTIVITY_CLASS);
+        }
+        if (portraitClass != null) {
+            if (!hasFieldInHierarchy(portraitClass, "isPurchaseProcessing")) {
+                appendMissing(missing, PORTRAIT_ACTIVITY_CLASS + ".isPurchaseProcessing");
+            }
+            if (!hasFieldInHierarchy(portraitClass, "webView")) {
+                appendMissing(missing, PORTRAIT_ACTIVITY_CLASS + ".webView");
+            }
+        }
+
+        // StashNativeCard.plugin -> plugin.webView / plugin.currentDialog (see resolveCheckoutWebView).
+        Class<?> pluginType = null;
+        try {
+            pluginType = StashNativeCard.class.getDeclaredField("plugin").getType();
+        } catch (Throwable t) {
+            appendMissing(missing, "StashNativeCard.plugin");
+        }
+        // The DECLARED type may be a base class/interface while the runtime instance is a subclass,
+        // so a miss here is unverifiable rather than missing — resolveCheckoutWebView also falls
+        // back to scanning the dialog's view tree. Warn instead of failing the check.
+        if (pluginType != null
+                && !hasFieldInHierarchy(pluginType, "webView")
+                && !hasFieldInHierarchy(pluginType, "currentDialog")) {
+            Log.w(TAG, "AND-03 self-check: neither 'webView' nor 'currentDialog' found on declared plugin type "
+                    + pluginType.getName()
+                    + "; they may live on a runtime subclass. WebView resolution falls back to a view-tree scan.");
+        }
+
+        String sdkVersion;
+        try {
+            sdkVersion = StashNativeCard.getVersion();
+        } catch (Throwable t) {
+            sdkVersion = "unknown";
+        }
+
+        if (missing.length() == 0) {
+            reflectionContractOk = true;
+            Log.i(TAG, "AND-03 self-check OK: stash-native reflection contract intact (SDK " + sdkVersion + ").");
+            return;
+        }
+
+        reflectionContractOk = false;
+        Log.e(TAG, "AND-03 self-check FAILED (SDK " + sdkVersion + "). Missing: " + missing + "."
+                + " Purchase-processing callbacks (OnPurchaseProcessing / OnProcessingCompleted) will NOT fire."
+                + " Either the StashNative AAR was upgraded and these private names changed - re-verify them"
+                + " in StashHelper.java - or the '-keep class com.stash.** { *; }' rule in Stash_UPL_Android.xml"
+                + " was narrowed and R8 stripped them from this build.");
+    }
+
+    private static void appendMissing(StringBuilder sb, String name) {
+        if (sb.length() > 0) {
+            sb.append(", ");
+        }
+        sb.append(name);
+    }
+
+    /** getDeclaredField does not search superclasses; the reflected members may be inherited. */
+    private static boolean hasFieldInHierarchy(Class<?> type, String fieldName) {
+        for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
+            try {
+                c.getDeclaredField(fieldName);
+                return true;
+            } catch (NoSuchFieldException ignored) {
+                // Keep walking up the hierarchy.
+            } catch (Throwable t) {
+                return false;
+            }
+        }
+        return false;
+    }
+
     private static void scheduleProcessingBridgeAttach() {
         // AND-05: a page (re)load invalidates any previously injected wrap; force re-evaluation on the next attach.
         processingBridgeWrapped = false;
@@ -372,6 +472,10 @@ public class StashHelper {
             }
 
             Log.d(TAG, "Initializing StashHelper (Stash Native 2.3.0)");
+
+            // AND-03: verify the private stash-native names this class reflects into before
+            // anything depends on them, so a broken contract is loud instead of silent.
+            verifyReflectionContract();
 
             registerCheckoutActivityTracking(activity);
             StashNativeCard card = StashNativeCard.getInstance();

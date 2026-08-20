@@ -7,6 +7,7 @@ public class StashUnreal5EditorTarget : TargetRules
     {
         Type = TargetType.Editor;
         DefaultBuildSettings = BuildSettingsVersion.V6;
+        IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_7;
         ExtraModuleNames.AddRange(new string[] { "StashUnreal5" });
     }
 }

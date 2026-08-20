@@ -122,3 +122,6 @@ Scripts/
 
 # Internal engineering notes (not for distribution)
 internal-docs/
+
+# Local working notes (not for distribution)
+TODO.md

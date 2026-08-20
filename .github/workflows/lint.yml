@@ -1,5 +1,22 @@
-# C++ lint with clang-tidy (Stash Unreal plugin)
-# For full semantic analysis, generate compile_commands with UnrealBuildTool and run clang-tidy locally with -p <build>.
+# Advisory C++ lint (clang-tidy) for the Stash Unreal plugin.
+#
+# This job is INTENTIONALLY non-blocking, and cannot be made a real gate here:
+# Unreal's headers and the UHT-generated *.generated.h files are not available
+# on a stock GitHub runner, so clang-tidy cannot build a complete AST. 28 of the
+# linted files include an Engine header directly and the rest pull one in
+# transitively, so parse errors are expected and findings are necessarily
+# incomplete. Treat the output as a hint, not a verdict.
+#
+# For a trustworthy run, generate a compile database locally and point
+# clang-tidy at it:
+#
+#   <UE>/Engine/Build/BatchFiles/Mac/Build.sh \
+#     -mode=GenerateClangDatabase -project="$PWD/StashUnreal5.uproject" \
+#     StashUnreal5Editor Mac Development
+#   clang-tidy -p <dir-containing-compile_commands.json> <files>
+#
+# Making this a genuine CI gate would require a runner with the engine
+# installed (self-hosted, or a licensed image).
 name: Lint
 
 on:
@@ -8,8 +25,12 @@ on:
   pull_request:
     branches: [main, 4.27-plus]
 
+permissions:
+  contents: read
+
 jobs:
   lint-cpp:
+    name: clang-tidy (advisory)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,27 +40,59 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang-tidy
 
-      - name: List plugin C++ sources
-        id: sources
+      - name: Collect first-party plugin sources
         run: |
-          find Plugins/Stash/Source -name '*.cpp' -o -name '*.h' | grep -v ObjC | sort > sources.txt
-          echo "count=$(wc -l < sources.txt)" >> $GITHUB_OUTPUT
+          # Vendored SDK headers (ThirdParty/) and Objective-C++ wrappers are
+          # excluded: the former is not our code, the latter needs -xobjective-c++
+          # plus the iOS SDK.
+          find Plugins/Stash/Source \
+            \( -name '*.cpp' -o -name '*.h' \) \
+            -not -path '*/ThirdParty/*' \
+            -not -path '*ObjC*' \
+            | sort > sources.txt
+          echo "Linting $(wc -l < sources.txt | tr -d " ") files:"
           cat sources.txt
 
-      - name: Run clang-tidy (plugin sources, minimal flags)
+      - name: Run clang-tidy
         run: |
-          # Run clang-tidy with plugin include paths; Engine headers are not available in CI,
-          # so some files may show include errors. Checks that do not require full parsing may still run.
-          EXIT=0
+          : > tidy.log
           while IFS= read -r f; do
             clang-tidy "$f" --config-file=.clang-tidy -- \
-              -std=c++17 -xc++ \
+              -std=c++20 -xc++ \
               -IPlugins/Stash/Source/Stash/Public \
               -IPlugins/Stash/Source/Stash/Private \
               -IPlugins/Stash/Source/Stash/Private/Android/Utils \
-              -IPlugins/Stash/Source/Stash/Private/IOS/Utils \
-              -DUE_BUILD_DEVELOPMENT=1 -DENGINE_MINOR_VERSION=27 \
-              -ferror-limit=0 2>&1 || EXIT=$?
+              -IPlugins/Stash/Source/StashEditor/Public \
+              -IPlugins/Stash/Source/StashEditor/Private \
+              -DUE_BUILD_DEVELOPMENT=1 \
+              -ferror-limit=0 >> tidy.log 2>&1 || true
           done < sources.txt
-          # Do not fail the job on clang-tidy/parse errors when Engine is missing
-          exit 0
+
+          files=$(wc -l < sources.txt | tr -d " ")
+          warnings=$(grep -cE 'warning: ' tidy.log || true)
+
+          {
+            echo "## clang-tidy (advisory)"
+            echo
+            echo "Linted **$files** first-party files - **$warnings** warning(s)."
+            echo
+            echo "Non-blocking by design: Engine headers are unavailable on the"
+            echo "runner, so parse errors are expected and results are partial."
+            echo "See the comment at the top of \`.github/workflows/lint.yml\`."
+            echo
+            echo '<details><summary>Findings (first 100)</summary>'
+            echo
+            echo '```'
+            if [ "$warnings" -gt 0 ]; then
+              grep -E 'warning: ' tidy.log | head -100
+            else
+              echo "(no warnings parsed)"
+            fi
+            echo '```'
+            echo
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # No failure gate on purpose - see the header comment. Do not "fix" this
+      # by adding `exit 1` without first giving the runner a real compile
+      # database, or the job will simply be permanently red.
