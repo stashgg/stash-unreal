@@ -373,33 +373,42 @@ static NSUInteger (*OriginalRootVCSupportedOrientations)(id, SEL) = NULL;
 static NSUInteger (*OriginalDelegateSupportedOrientationsForWindow)(id, SEL, UIApplication*, UIWindow*) = NULL;
 static Class _swizzledRootVCClass = nil;
 
+// Resolves the game's main window, scene-first.
+//
+// UIApplication.windows is deprecated as of iOS 15 and is scene-unaware, so it can hand back a
+// window belonging to a different scene than the one being rotated. This project's minimum
+// deployment target is iOS 15, so connectedScenes / UIWindowScene.windows (both iOS 13+) are
+// unconditionally available and no availability guard is needed.
+//
+// Two passes in one traversal: prefer a window on a foreground-active scene, otherwise take the
+// first eligible window on any window scene. That second pass is load-bearing — several callers
+// run while the app is NOT foreground-active (the didBecomeActive resync, and the force-portrait
+// clear/disengage failsafes). The old deprecated scan happened to cover those because it ignored
+// scene state; dropping it without this fallback would return nil there and strand the scene in
+// portrait.
 static UIWindow* StashMainGameWindow(void)
 {
 	UIApplication* app = [UIApplication sharedApplication];
-	for (UIWindow* w in app.windows)
+
+	UIWindow* fallbackWindow = nil;
+	for (UIScene* scene in app.connectedScenes)
 	{
-		if (w.rootViewController != nil && w.windowLevel == UIWindowLevelNormal)
-			return w;
-	}
-	if (@available(iOS 15.0, *))
-	{
-		for (UIScene* scene in app.connectedScenes)
+		if (![scene isKindOfClass:[UIWindowScene class]])
+			continue;
+
+		UIWindowScene* ws = (UIWindowScene*)scene;
+		const BOOL bForegroundActive = (ws.activationState == UISceneActivationStateForegroundActive);
+		for (UIWindow* w in ws.windows)
 		{
-			if ([scene isKindOfClass:[UIWindowScene class]])
-			{
-				UIWindowScene* ws = (UIWindowScene*)scene;
-				if (ws.activationState == UISceneActivationStateForegroundActive)
-				{
-					for (UIWindow* w in ws.windows)
-					{
-						if (w.rootViewController != nil && w.windowLevel == UIWindowLevelNormal)
-							return w;
-					}
-				}
-			}
+			if (w.rootViewController == nil || w.windowLevel != UIWindowLevelNormal)
+				continue;
+			if (bForegroundActive)
+				return w;
+			if (fallbackWindow == nil)
+				fallbackWindow = w;
 		}
 	}
-	return nil;
+	return fallbackWindow;
 }
 
 // Desired orientation mask for the host window in our deterministic states (landscape lock or
