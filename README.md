@@ -10,7 +10,8 @@ Unreal Engine plugin wrapper for [stash-native](https://github.com/stashgg/stash
 
 - Unreal Engine 5.0+ (sample project targets **5.7**)
 - iOS 13.0+ / Android API 21+ (the bundled **StashNative.xcframework** declares `MinimumOSVersion` 13.0)
-- Xcode (iOS), Visual Studio (Windows/Android), Android SDK (Android)
+- Windows 10 1809+ / Windows 11 (x64) with the WebView2 Evergreen runtime (preinstalled on Windows 11 and updated Windows 10), macOS 11+ (arm64 and x86_64) for desktop players
+- Xcode (iOS, macOS), Visual Studio (Windows/Android), Android SDK (Android)
 
 ## Sample / Downloads
 
@@ -25,7 +26,7 @@ The sample keep-alive config uses the example notification icon **`stash_icon`**
 
 ### Use in your project
 
-Copy the **`Plugins/Stash/`** folder into your project’s **`Plugins/`** directory and enable the plugin under **Edit → Plugins → Mobile → Stash**.
+Copy the **`Plugins/Stash/`** folder into your project’s **`Plugins/`** directory and enable the plugin under **Edit → Plugins → Monetization → Stash**.
 
 **Editor checkout preview (optional):** If your Unreal Engine build includes the **Web Browser** plugin, enable it under **Edit → Plugins → Web Browser**, rebuild the editor, then use **Window → Stash Preview**. The project does **not** require Web Browser to open — Stash mobile builds are unaffected.
 
@@ -103,17 +104,30 @@ The **Active config** block in the preview controls panel shows which ratio fiel
 
 ### Folder structure
 
-- **Plugins/Stash/** – Plugin root: `Source/Stash` (module), `ThirdParty` (StashNative AAR + XCFramework), `Resources`.
+- **Plugins/Stash/** – Plugin root: `Source/Stash` (module), `ThirdParty` (StashNative AAR + XCFramework, `StashNativeDesktop.dll` / `.bundle` for Windows and macOS), `Resources`.
 - **Content/StashUnrealSample/** – Sample map (`Maps/Stash_SampleScene`) and demo UI (`Blueprints/WBP_StashUI`).
 - **StashUnrealSample/Android/** – Sample-only Android drawables (e.g. keep-alive notification icon); not copied when you use only the plugin in another project.
 - **StashBlueprint** – Blueprint function library: `OpenCard`, `OpenModal`, `OpenBrowser`, `CloseBrowser`, `SetAndroidCheckoutBackdropBytes`, `ClearAndroidCheckoutBackdrop`, `CaptureViewportForAndroidCheckoutBackdrop`, config structs, delegates.
-- **Key files:** `StashBlueprint.h`, iOS wrapper `StashNativeCardWrapper` (ObjC), Android `StashHelper.java`, ThirdParty StashNative binaries.
+- **Key files:** `StashBlueprint.h`, iOS wrapper `StashNativeCardWrapper` (ObjC), Android `StashHelper.java`, desktop loader `Private/Desktop/StashDesktopNative.cpp`, ThirdParty StashNative binaries.
 
 ## Usage
 
 Stash Native presents Stash Pay and webshop links in three ways: **openCard** (drawer/card), **openModal** (centered modal), and **openBrowser** (system browser). Checkout URLs must be generated on your backend; see the [Stash Pay Integration Guide](https://docs.stash.gg/guides/stash-pay/integration).
 
 **iOS note:** The first OpenCard/OpenModal call can be slow under the Xcode debugger (WKWebView); production builds are unaffected.
+
+### Windows and macOS
+
+Packaged Windows and macOS games use the same nodes and events. The checkout is presented as a card over the game window (the game keeps rendering underneath) through the stash-native desktop hosts shipped under `ThirdParty/Windows/x64` and `ThirdParty/macOS` and staged next to the executable as `RuntimeDependencies`; nothing is bundled, Windows uses the WebView2 Evergreen runtime and macOS the system WebKit.
+
+- **Sizing:** the card is a fixed 480 x 720 pt surface and the modal 480 x 600 pt, centred and clamped to the game window; the ratio fields of **Stash Card Config** / **Stash Modal Config** are accepted and ignored, **Force Portrait** has no effect.
+- **Open Browser** opens the system browser; **Close Browser** is a no-op.
+- **Fullscreen:** on Windows the plugin switches an exclusive-fullscreen game to windowed fullscreen for the checkout and restores it afterwards.
+- **Editor:** when the Stash Preview (CEF) is enabled it wins as before; otherwise Play-in-Editor opens the desktop host in a standalone window. Packaged players use the attached card.
+- **Apple Pay is not available in the macOS card** (a WebKit limitation for embedded web views; the checkout hides the button). Cards, Google Pay and PayPal are. Everything, Apple Pay included, is available on Windows.
+- **Links:** generate checkout links without the `platform` field for desktop players; saved payment methods are keyed to the user id you pass.
+- **Anti-cheat:** the host creates child windows of the game window and spawns the WebView2 processes out of process; it injects nothing into the game. If your vendor blocks either, fall back to **Open Browser**.
+- **Events** arrive on the game thread through **Get Stash Subsystem** exactly as on mobile; there is no browser-closed event on any platform.
 
 **Android checkout backdrop (landscape → portrait):** The OS may still **animate** rotation when checkout forces portrait; stash-native shows your capture **behind the dim overlay** (not a frozen game swapchain). Prefer: **Capture Viewport For Android Checkout Backdrop** (JPEG, end-of-frame), assign bytes to **Android Checkout Backdrop** on your **Stash Card Config**, then **Open Card With Config** so backdrop and `openCard` run in one UI-thread step. Alternatively call **Set Android Checkout Backdrop Bytes** immediately before open (same thread order as Unity’s `WaitForEndOfFrame` → `setBackdropBytes` → `OpenCard`). Match Unity’s README: consider locking **screen orientation** while the card is open. Requires **StashNative-2.2.0+** AAR (`Stash_UPL_Android.xml` `gradleCopies`; 2.1.4+ also supports backdrop via `setBackdropBytes`).
 
@@ -399,7 +413,7 @@ UStashBlueprint::OnPaymentSuccess.AddDynamic(this, &AYourClass::OnStashPaymentSu
 | `OpenModal(URL)` | Opens modal with default config |
 | `OpenModalWithConfig(URL, Config)` | Opens modal with custom config |
 | `OpenBrowser(URL)` | Opens URL in system browser |
-| `CloseBrowser()` | Dismisses browser (iOS only; no-op on Android) |
+| `CloseBrowser()` | Dismisses browser (iOS only; no-op on Android, Windows and macOS) |
 | `IsCardOpen()` | Returns true if card or modal is displayed |
 | `IsPurchaseProcessing()` | Returns true if a purchase is currently being processed (checkout cannot be dismissed) |
 | `DismissCard()` | Dismisses card/modal |
@@ -496,6 +510,9 @@ Unset the variable or close the terminal to return to quiet packaging logs. This
 - **Get Stash Subsystem returns null:** Ensure you pass a valid world context (e.g. **Self** from Level Blueprint or an Actor in a running game). In the editor before Play-in-Editor there is no play world, so the subsystem is not available.
 - **Payment callback runs twice:** You bound both **Get Stash Subsystem** events and legacy **`UStashBlueprint::OnPaymentSuccess`** (or another static delegate). Use **one** path — subsystem only is recommended.
 - **Blueprint shows old nodes (Open Checkout, Set Force Web Based Checkout):** The plugin API is **Open Card**, **Open Card With Config**, **Open Browser**, **Close Browser**, **Is Card Open**, **Dismiss Card** (no Open Checkout, no Force Web Based). If you still see old names, do a **clean rebuild**: close the editor, delete the `Intermediate` and `Binaries` folders in your project root, then reopen the `.uproject`. The editor will recompile and Blueprint will show only the new Stash nodes.
+- **Windows – checkout does not open, `LogStash` reports the WebView2 runtime is missing:** the player machine needs the WebView2 Evergreen runtime (preinstalled on Windows 11 and updated Windows 10); ship the Evergreen bootstrapper with your installer or fall back to **Open Browser**.
+- **Windows / macOS – "Desktop host not found":** `StashNativeDesktop.dll` / `StashNativeDesktop.bundle` are staged from `Plugins/Stash/Source/Stash/ThirdParty/` as `RuntimeDependencies`; a custom staging step that strips plugin binaries must keep them.
+- **macOS – Gatekeeper complains about the bundle:** sign and notarize the packaged app; the bundle inside `Contents/UE/.../ThirdParty/macOS` is signed as part of the app.
 - **iOS – undefined symbol / Library not loaded:** Add WebKit and SafariServices if needed; ensure **StashNative.xcframework** is embedded (Embed & Sign) and present under `Plugins/Stash/Source/Stash/ThirdParty/iOS/`.
 - **Android – class not found / blank card:** Ensure **StashNative** AAR is in `ThirdParty/Android/` (this repo ships `StashNative-2.3.0.aar`; the filename must match `Stash_UPL_Android.xml` → `gradleCopies`). Add internet permission. ProGuard: keep `com.stash.**`.
 - **Android – checkout backdrop has no effect:** Use a Stash Native Android AAR that supports the checkout backdrop on `StashNativeCard` (this repo ships 2.3.0). Confirm call order: set bytes (or capture delegate) **before** Open Card. If you replace the AAR with another build, update the `gradleCopies` `copyFile` `src` path to that filename.
