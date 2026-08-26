@@ -23,6 +23,10 @@
 #include "IOS/ObjC/StashNativeCardWrapper.h"
 #endif
 
+#if PLATFORM_WINDOWS || PLATFORM_MAC
+#include "Desktop/StashDesktopNative.h"
+#endif
+
 namespace
 {
 #if WITH_EDITOR
@@ -187,6 +191,15 @@ void UStashBlueprint::OpenCard(const FString& URL)
 		return;
 	}
 #endif
+#if PLATFORM_WINDOWS || PLATFORM_MAC
+	// Desktop host: a card over the game window; a standalone window in the editor (PIE) when the
+	// CEF preview is off.
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card on desktop: urlLen=%d"), URL.Len());
+	if (FStashDesktopNative::OpenCard(URL, FStashCardConfig(), GIsEditor))
+	{
+		return;
+	}
+#endif
 	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenCard called on unsupported platform"));
 #endif
 }
@@ -244,6 +257,13 @@ void UStashBlueprint::OpenCardWithConfig(const FString& URL, const FStashCardCon
 		return;
 	}
 #endif
+#if PLATFORM_WINDOWS || PLATFORM_MAC
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening card with config on desktop: urlLen=%d"), URL.Len());
+	if (FStashDesktopNative::OpenCard(URL, SafeConfig, GIsEditor))
+	{
+		return;
+	}
+#endif
 	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenCardWithConfig called on unsupported platform"));
 #endif
 }
@@ -264,11 +284,14 @@ bool UStashBlueprint::IsCardOpen()
 		false
 	);
 #else
+	bool bOpen = false;
 #if WITH_EDITOR
-	return FStashEditorPreviewBridge::TryIsCardOpen();
-#else
-	return false;
+	bOpen = FStashEditorPreviewBridge::TryIsCardOpen();
 #endif
+#if PLATFORM_WINDOWS || PLATFORM_MAC
+	bOpen = bOpen || FStashDesktopNative::IsCardOpen();
+#endif
+	return bOpen;
 #endif
 }
 
@@ -284,11 +307,14 @@ bool UStashBlueprint::IsPurchaseProcessing()
 		false
 	);
 #else
+	bool bProcessing = false;
 #if WITH_EDITOR
-	return FStashEditorPreviewBridge::TryIsPurchaseProcessing();
-#else
-	return false;
+	bProcessing = FStashEditorPreviewBridge::TryIsPurchaseProcessing();
 #endif
+#if PLATFORM_WINDOWS || PLATFORM_MAC
+	bProcessing = bProcessing || FStashDesktopNative::IsPurchaseProcessing();
+#endif
+	return bProcessing;
 #endif
 }
 
@@ -305,8 +331,13 @@ void UStashBlueprint::DismissCard()
 		"",
 		true
 	);
-#elif WITH_EDITOR
+#else
+#if WITH_EDITOR
 	FStashEditorPreviewBridge::TryDismissCard();
+#endif
+#if PLATFORM_WINDOWS || PLATFORM_MAC
+	FStashDesktopNative::Dismiss();
+#endif
 #endif
 }
 
@@ -341,6 +372,13 @@ void UStashBlueprint::OpenBrowser(const FString& URL)
 		return;
 	}
 #endif
+#if PLATFORM_WINDOWS || PLATFORM_MAC
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening browser on desktop: urlLen=%d"), URL.Len());
+	if (FStashDesktopNative::OpenBrowser(URL))
+	{
+		return;
+	}
+#endif
 	UE_LOG(LogStash, Warning, TEXT("[Stash] OpenBrowser called on unsupported platform"));
 #endif
 }
@@ -354,6 +392,9 @@ void UStashBlueprint::CloseBrowser()
 	// No-op on Android (Chrome Custom Tabs cannot be closed by the app)
 #elif WITH_EDITOR
 	FStashEditorPreviewBridge::TryCloseBrowser();
+#elif PLATFORM_WINDOWS || PLATFORM_MAC
+	// The system browser cannot be closed by the app.
+	UE_LOG(LogStash, Log, TEXT("[Stash] CloseBrowser: no-op on desktop"));
 #else
 	UE_LOG(LogStash, Warning, TEXT("[Stash] CloseBrowser called on unsupported platform"));
 #endif
@@ -386,6 +427,13 @@ void UStashBlueprint::OpenModal(const FString& URL)
 #else
 #if WITH_EDITOR
 	if (TryEditorPreview([&]() { return FStashEditorPreviewBridge::TryOpenModal(URL); }))
+	{
+		return;
+	}
+#endif
+#if PLATFORM_WINDOWS || PLATFORM_MAC
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening modal on desktop: urlLen=%d"), URL.Len());
+	if (FStashDesktopNative::OpenModal(URL, FStashModalConfig(), GIsEditor))
 	{
 		return;
 	}
@@ -440,6 +488,13 @@ void UStashBlueprint::OpenModalWithConfig(const FString& URL, const FStashModalC
 #else
 #if WITH_EDITOR
 	if (TryEditorPreview([&]() { return FStashEditorPreviewBridge::TryOpenModal(URL, SafeConfig); }))
+	{
+		return;
+	}
+#endif
+#if PLATFORM_WINDOWS || PLATFORM_MAC
+	UE_LOG(LogStash, Log, TEXT("[Stash] Opening modal with config on desktop: urlLen=%d"), URL.Len());
+	if (FStashDesktopNative::OpenModal(URL, SafeConfig, GIsEditor))
 	{
 		return;
 	}
