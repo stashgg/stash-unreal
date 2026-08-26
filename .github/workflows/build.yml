@@ -1,0 +1,58 @@
+# Compiles the plugin for Win64 and Mac with Epic's Unreal Engine container image. Hosted runners cannot
+# build UE (no engine, and the image needs an Epic-linked GitHub account to pull), so this workflow only
+# runs when the EPIC_GHCR_TOKEN secret exists: a token of an account that belongs to the EpicGames
+# organization on GitHub (https://github.com/EpicGames/Signup). Until then the plugin is verified locally
+# (see README, Rebuilding the project) and by the advisory clang-tidy lint.
+#
+# Switch-on steps: add EPIC_GHCR_TOKEN (and EPIC_GHCR_USER) as repository secrets, then this job compiles
+# the editor target on push and pull request like lint.yml does.
+
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, 'desktop/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-secret:
+    name: Engine image available
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        env:
+          EPIC_GHCR_TOKEN: ${{ secrets.EPIC_GHCR_TOKEN }}
+        run: |
+          if [ -n "$EPIC_GHCR_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "EPIC_GHCR_TOKEN is not set; the Unreal build is skipped (see the header of this workflow)."
+          fi
+
+  build-linux-editor:
+    name: Compile plugin (Epic container, Linux editor target)
+    needs: check-secret
+    if: needs.check-secret.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/epicgames/unreal-engine:dev-slim-5.7
+      credentials:
+        username: ${{ secrets.EPIC_GHCR_USER }}
+        password: ${{ secrets.EPIC_GHCR_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build editor target
+        run: |
+          /home/ue4/UnrealEngine/Engine/Build/BatchFiles/Linux/Build.sh \
+            StashUnreal5Editor Linux Development \
+            -Project="$GITHUB_WORKSPACE/StashUnreal5.uproject" -WaitMutex

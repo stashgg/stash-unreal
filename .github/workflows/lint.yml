@@ -23,7 +23,8 @@ on:
   push:
     branches: [main, 4.27-plus]
   pull_request:
-    branches: [main, 4.27-plus]
+    # desktop/** so every PR of a stacked desktop branch set gets CI, not only the bottom one.
+    branches: [main, 4.27-plus, 'desktop/**']
 
 permissions:
   contents: read
@@ -62,6 +63,8 @@ jobs:
               -IPlugins/Stash/Source/Stash/Public \
               -IPlugins/Stash/Source/Stash/Private \
               -IPlugins/Stash/Source/Stash/Private/Android/Utils \
+            -IPlugins/Stash/Source/Stash/Private/Desktop \
+            -IPlugins/Stash/Source/Stash/ThirdParty/Desktop/include \
               -IPlugins/Stash/Source/StashEditor/Public \
               -IPlugins/Stash/Source/StashEditor/Private \
               -DUE_BUILD_DEVELOPMENT=1 \
