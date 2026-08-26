@@ -125,3 +125,6 @@ internal-docs/
 
 # Local working notes (not for distribution)
 TODO.md
+
+# Vendored stash-native desktop host (kept despite the *.dll rule above)
+!Plugins/Stash/Source/Stash/ThirdParty/Windows/x64/StashNativeDesktop.dll
