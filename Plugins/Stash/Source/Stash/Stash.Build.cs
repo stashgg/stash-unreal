@@ -112,5 +112,34 @@ public class Stash : ModuleRules
 				PublicIncludePaths.Add(HeaderPath);
 			}
 		}
+
+		// Windows and macOS: the stash-native desktop hosts, loaded at run time through their C ABI
+		// (Private/Desktop/StashDesktopNative.cpp). No platform allow-list in the .uplugin, the module builds
+		// everywhere and the loader decides at run time.
+		else if (Target.Platform == UnrealTargetPlatform.Win64 || Target.Platform == UnrealTargetPlatform.Mac)
+		{
+			PrivateDependencyModuleNames.AddRange(new string[]
+			{
+				"Projects",        // IPluginManager: plugin base dir for the binary path
+				"Slate",
+				"SlateCore",       // game viewport SWindow -> native window handle
+				"ApplicationCore",
+			});
+
+			PrivateIncludePaths.AddRange(new string[]
+			{
+				Path.Combine(ModuleDirectory, "Private", "Desktop"),
+				Path.Combine(ThirdPartyPath, "Desktop", "include"),
+			});
+
+			if (Target.Platform == UnrealTargetPlatform.Win64)
+			{
+				RuntimeDependencies.Add(Path.Combine(ThirdPartyPath, "Windows", "x64", "StashNativeDesktop.dll"), StagedFileType.NonUFS);
+			}
+			else
+			{
+				RuntimeDependencies.Add(Path.Combine(ThirdPartyPath, "macOS", "StashNativeDesktop.bundle"), StagedFileType.NonUFS);
+			}
+		}
 	}
 }
